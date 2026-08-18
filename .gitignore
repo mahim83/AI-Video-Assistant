@@ -1,0 +1,42 @@
+# ─── Secrets — never commit ───────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# ─── Virtual environment ─────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# ─── Generated data (regenerable, and large) ─────────────────────────────────
+# cached audio (hundreds of MB per run)
+downloads/
+# Chroma embeddings
+vector_db/
+# saved meeting JSON
+outputs/
+*.wav
+*.mp3
+*.mp4
+*.m4a
+*.webm
+*.part
+
+# ─── Editor / OS ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+tempCodeRunnerFile.py
+.DS_Store
+Thumbs.db
+desktop.ini
