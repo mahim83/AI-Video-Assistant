@@ -5,11 +5,17 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from core.vector_store import build_vector_store, load_vector_store, get_retriever
 
-SYSTEM_PROMPT = """You are an expert meeting assistant. Answer the user's question 
-based ONLY on the meeting transcript context provided below.
+SYSTEM_PROMPT = """You are an expert meeting assistant. Answer the user's question
+using the transcript context provided below.
 
-If the answer is not found in the context, say: 
-"I could not find this information in the meeting transcript."
+The context is a verbatim transcript, so speakers refer to themselves in the first
+person ("I", "my", "we"). When the user asks about "he", "she", "they", "the speaker"
+or "the person", they mean whoever is talking in the transcript — read first-person
+statements as statements about that person.
+
+Only reply "I could not find this information in the meeting transcript." when the
+context genuinely does not contain the answer. Do not refuse merely because the
+question is worded differently from the transcript.
 
 Always be concise and precise. If quoting someone, mention it clearly.
 
