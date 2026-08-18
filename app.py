@@ -41,6 +41,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+def md(text: str) -> str:
+    """
+    Streamlit renders $...$ as LaTeX, so an LLM writing "$20 plan ... $100 tier"
+    loses everything between the two dollar signs. Escape them.
+    """
+    return str(text).replace("$", r"\$")
+
+
 # ── session state ────────────────────────────────────────────────────────────
 st.session_state.setdefault("result", None)
 st.session_state.setdefault("messages", [])
@@ -150,13 +158,13 @@ c3.metric("Est. read time", f"{max(1, len(transcript.split()) // 200)} min")
 tabs = st.tabs(["📋 Summary", "✅ Action Items", "🔑 Decisions", "❓ Questions", "📝 Transcript"])
 
 with tabs[0]:
-    st.markdown(result["summary"])
+    st.markdown(md(result["summary"]))
 with tabs[1]:
-    st.markdown(result["action_items"])
+    st.markdown(md(result["action_items"]))
 with tabs[2]:
-    st.markdown(result["key_decisions"])
+    st.markdown(md(result["key_decisions"]))
 with tabs[3]:
-    st.markdown(result["open_questions"])
+    st.markdown(md(result["open_questions"]))
 with tabs[4]:
     st.download_button("Download transcript (.txt)", transcript,
                        file_name=f"{result['collection_name']}.txt", mime="text/plain")
@@ -167,17 +175,17 @@ st.markdown("### 💬 Chat with this meeting")
 
 for m in st.session_state.messages:
     with st.chat_message(m["role"], avatar="🤖" if m["role"] == "assistant" else None):
-        st.markdown(m["content"])
+        st.markdown(md(m["content"]))
 
 if q := st.chat_input("Ask anything about this meeting..."):
     st.session_state.messages.append({"role": "user", "content": q})
     with st.chat_message("user"):
-        st.markdown(q)
+        st.markdown(md(q))
     with st.chat_message("assistant", avatar="🤖"):
         with st.spinner("Searching the transcript..."):
             try:
                 a = ask_question(result["rag_chain"], q)
             except Exception as e:
                 a = f"⚠️ {type(e).__name__}: {e}"
-        st.markdown(a)
+        st.markdown(md(a))
     st.session_state.messages.append({"role": "assistant", "content": a})
