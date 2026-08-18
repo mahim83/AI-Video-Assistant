@@ -6,18 +6,6 @@ Point it at a two-hour meeting recording and get back the decisions, the follow-
 
 ---
 
-## Demo
-
-Results view — title, metrics, and the summary / action items / decisions / questions / transcript tabs:
-
-![AI Video Assistant — results view](docs/screenshot.png)
-
-Ask questions about the transcript, answered from what was actually said:
-
-![AI Video Assistant — chat](docs/screenshot-chat.png)
-
----
-
 ## What it does
 
 ```
