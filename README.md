@@ -1,210 +1,115 @@
-# 🎬 AI Video Assistant
+# AI Video Assistant
 
-Turn any YouTube video or audio file into a **transcript, a structured summary, and a chatbot you can question about its contents.**
+AI Video Assistant turns a YouTube video or local audio/video file into a transcript, a summary, and a chat interface for asking questions about the recording.
 
-Point it at a two-hour meeting recording and get a concise summary plus the ability to ask *"what did we agree about the budget?"* without scrubbing the timeline.
+## How it works
 
----
-
-## What it does
-
-```
-YouTube URL / audio file
-          │
-          ▼
-   ┌─────────────┐   yt-dlp + ffmpeg + pydub
-   │   1. AUDIO  │   download → WAV → 10-minute chunks
-   └─────────────┘
-          │
-          ▼
-   ┌─────────────┐   Deepgram (English) · Sarvam (Hinglish) · Whisper (local)
-   │ 2. TRANSCRIBE│
-   └─────────────┘
-          │
-          ▼
-    ┌─────────────┐   OpenAI via LangChain — map-reduce over long transcripts
-  │ 3. SUMMARISE │   title · summary
-   └─────────────┘
-          │
-          ▼
-   ┌─────────────┐   Chroma + HuggingFace embeddings, retrieval-augmented Q&A
-   │  4. CHAT     │
-   └─────────────┘
+```mermaid
+flowchart TD
+	A["YouTube URL or local media"] --> B["Download, convert, and split audio<br/>yt-dlp, FFmpeg, pydub"]
+	B --> C{"Transcription engine"}
+	C -->|English default| D["Deepgram"]
+	C -->|Hinglish| E["Sarvam"]
+	C -->|Local English| F["Whisper"]
+	D --> G["Transcript"]
+	E --> G
+	F --> G
+	G --> H["OpenAI title and map-reduce summary"]
+	G --> I["Local embeddings"]
+	I --> J["Chroma index per meeting"]
+	K["User question"] --> L["Retrieve relevant transcript chunks"]
+	J --> L
+	L --> M["OpenAI chat answer"]
+	G --> N["Saved meeting JSON"]
+	H --> N
+	H --> O["Streamlit UI or terminal CLI"]
+	M --> O
 ```
 
-Every processed video is **saved to disk**, so reopening one is instant — no re-download, no re-transcription, no API spend.
+The transcript is the shared source for both the summary and chat. OpenAI creates the title and summary, while Chroma stores transcript embeddings locally so chat can retrieve passages relevant to each question.
 
----
+1. `yt-dlp` downloads YouTube audio; `pydub` and FFmpeg convert and split audio into chunks.
+2. A transcription engine turns the audio into text: Deepgram is the English default, Sarvam handles Hinglish, and Whisper runs locally for English.
+3. **OpenAI** generates a title and a concise summary. Long transcripts are summarized in sections and then combined.
+4. Transcript chunks are embedded locally and stored in Chroma. The chat retrieves relevant chunks and uses OpenAI to answer questions about the video. Greetings and general questions receive conversational replies too.
 
-## Features
+## Components
 
-- **Two front ends** — a Streamlit web UI and a terminal CLI, sharing one pipeline
-- **Three transcription engines**, switchable per run
-- **Handles long recordings** — audio is chunked, and summaries are map-reduced so transcripts never blow the context window
-- **Chat with your transcript** — transcript-grounded video answers, with natural replies to acknowledgments and general questions
-- **Persistent library** — every run is saved and reloadable in seconds
-- **Upload or stream** — YouTube URLs or local mp3/wav/m4a/mp4/mkv files
-- **Pre-flight checker** — validates every key, binary and service before you commit to a long run
-
----
-
-## Transcription engines
-
-| Engine | Language | Runs on | Speed | Cost |
-|---|---|---|---|---|
-| **Deepgram** *(default)* | English | Cloud | ~12s per 90s of audio | API credits |
-| **Sarvam** | Hinglish → English | Cloud | Slower — 25s slices | API credits |
-| **Whisper** | English | Your CPU | Minutes; laptop gets warm | Free, offline |
-
-Deepgram is roughly **an order of magnitude faster** than local Whisper. Whisper remains available for offline or zero-cost use.
-
-> **Tip:** cloud engines can mishear domain jargon and product names. Deepgram supports keyword boosting via a `keyterm` parameter if you process specialist content.
-
----
+| File | Purpose |
+|---|---|
+| `app.py` | Streamlit interface for processing videos, viewing results, and chatting. |
+| `main.py` | Shared pipeline, terminal interface, and saving/loading meetings. |
+| `check_setup.py` | Checks configuration, binaries, imports, and API connectivity. |
+| `core/transcriber.py` | Routes audio to Deepgram, Sarvam, or Whisper. |
+| `core/summarizer.py` | Uses OpenAI for title generation and map-reduce summaries. |
+| `core/vector_store.py` | Splits transcripts and stores their embeddings in Chroma, per meeting. |
+| `core/rag_engine.py` | Retrieves transcript passages and builds the OpenAI chat chain. |
+| `utils/audio_processor.py` | Downloads, converts, and chunks audio. |
 
 ## Requirements
 
-- **Python 3.10+** (developed on 3.12)
-- **ffmpeg** on your `PATH` — required by `pydub` and `yt-dlp`
-  - Windows: `winget install Gyan.FFmpeg`
-  - macOS: `brew install ffmpeg`
-  - Linux: `sudo apt install ffmpeg`
-- API keys for [Deepgram](https://console.deepgram.com/), [OpenAI](https://platform.openai.com/api-keys), and optionally [Sarvam](https://dashboard.sarvam.ai/)
-
----
+- Python 3.10 or later.
+- FFmpeg installed and available on `PATH` (`winget install Gyan.FFmpeg` on Windows).
+- A Deepgram API key for the default transcription engine and an OpenAI API key for titles, summaries, and chat. Sarvam is optional for Hinglish.
 
 ## Setup
 
-```bash
-git clone <your-repo-url>
-cd "AI Video Assistant"
-
+```powershell
 python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# macOS / Linux
-source .venv/bin/activate
-
-pip install -r requirements.txt
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-Then create your `.env` from the template and fill in your keys:
-
-```bash
-cp .env.example .env
-```
+Open `.env` and add your keys:
 
 ```env
-DEEPGRAM_API_KEY=your_key_here
-OPENAI_API_KEY=your_key_here
+DEEPGRAM_API_KEY=your_deepgram_key
+OPENAI_API_KEY=your_openai_key
 OPENAI_MODEL=gpt-4o-mini
-SARVAM_API_KEY=your_key_here      # only for Hinglish
+SARVAM_API_KEY=your_sarvam_key
 ```
 
-Verify everything before your first real run:
+`SARVAM_API_KEY` is only needed for Hinglish transcription. Keep `.env` private and never commit it. Run the preflight check before processing a long recording:
 
-```bash
+```powershell
 python check_setup.py
 ```
 
-```
-Environment
-  ✅  DEEPGRAM_API_KEY             set (English transcription)
-  ✅  OPENAI_API_KEY               set (summary / chat)
-Binaries
-  ✅  ffmpeg                       ffmpeg version 8.0.1
-  ✅  yt-dlp                       v2026.07.04
-Services (live calls)
-  ✅  Deepgram                     HTTP 200 (model=nova-3)
-  ✅  OpenAI                       HTTP 200
-==========================================================
-✅ All checks passed — run:  streamlit run app.py
-```
+## Run
 
----
+Start the web app:
 
-## Usage
-
-### Web UI
-
-```bash
+```powershell
 streamlit run app.py
 ```
 
-Opens at `http://localhost:8501`. Paste a URL or drop a file in the sidebar, pick an engine, and watch the pipeline report progress live. Results include the summary and transcript, with a chat box underneath.
+Open the local URL printed in the terminal. Choose a YouTube URL or upload a file, select a transcription engine, and process the video. The result view contains the summary, transcript, and chat.
 
-### Terminal
+For the terminal interface:
 
-```bash
+```powershell
 python main.py
 ```
 
-```
-Saved meetings:
-  [1] ai_economy_cracks_anthropic_s_pricing_te_20260819_020531
+It lets you reopen a saved meeting by number or enter a new YouTube URL or local file path.
 
-Pick a number to reopen, or paste a YouTube URL / file path: 1
-Loaded: AI Economy Cracks: Anthropic's Pricing Test
-...
-💬 Chat with your meeting (type 'exit' to quit)
-You: what did they decide about pricing?
-```
+## Saved data and chat history
 
-That first prompt takes **either** a number (reopen a saved meeting) **or** a URL / file path (process something new).
+- Meeting details, transcript, and summary are saved as JSON files in `outputs/`.
+- Chroma transcript embeddings are stored in `vector_db/`; downloaded and processed audio is stored in `downloads/`.
+- Chat messages are temporary Streamlit session state. They are not saved with meetings and reset when another meeting is loaded or processed, the meeting is cleared, or the app session ends.
 
----
+These folders and `.env` are excluded from Git by `.gitignore`.
 
-## Project structure
+## YouTube cookies
 
-```
-├── app.py                  # Streamlit web UI
-├── main.py                 # CLI + pipeline orchestration + persistence
-├── check_setup.py          # pre-flight validator
-├── core/
-│   ├── transcriber.py      # Deepgram / Sarvam / Whisper routing
-│   ├── summarizer.py       # title + map-reduce summary (OpenAI)
-│   ├── vector_store.py     # Chroma, one collection per meeting
-│   └── rag_engine.py       # retrieval-augmented Q&A chain
-├── utils/
-│   └── audio_processor.py  # yt-dlp download, WAV conversion, chunking
-├── outputs/                # saved meetings (gitignored)
-├── downloads/              # cached audio (gitignored)
-└── vector_db/              # Chroma embeddings (gitignored)
-```
+Public videos usually need no browser cookies. If YouTube requests sign-in, first update `yt-dlp`. If needed, set `YTDLP_BROWSER=firefox` (or another supported browser) in `.env`, or export cookies in Netscape format and set `YTDLP_COOKIES=downloads/youtube-cookies.txt`. Cookie-file configuration takes precedence. Keep exports private, use them only when necessary, and delete them when finished. On Windows, Chrome may prevent `yt-dlp` from reading its cookie database while Chrome is running.
 
-## Chat and saved data
+## Privacy
 
-Each processed video is saved as a JSON file in `outputs/`, and its transcript embeddings are stored in `vector_db/`. Chat messages are held only in the current Streamlit session; they are not saved with the meeting. Loading or processing another meeting, clearing the current meeting, or ending the app session clears that conversation. Questions about video content use retrieved transcript passages; acknowledgments and unrelated questions receive normal conversational replies.
-
----
-
-## Troubleshooting
-
-**`HTTP Error 403: Forbidden` when downloading**
-YouTube gates most player clients behind a proof-of-origin token. `audio_processor.py` pins the clients that still serve media (`android`, `tv_simply`). If it resurfaces, update `yt-dlp` first — YouTube changes this often.
-
-**`Sign in to confirm you're not a bot` when downloading**
-YouTube is challenging the request; this is separate from the OpenAI key. Update `yt-dlp`, then, if needed, use `YTDLP_BROWSER=firefox` or export YouTube cookies from Chrome in Netscape format and set `YTDLP_COOKIES=downloads/youtube-cookies.txt` in `.env`. The cookie-file setting takes precedence over `YTDLP_BROWSER`. Keep cookie data private; the `downloads/` folder is gitignored, and YouTube warns that using an account with yt-dlp may result in account restrictions. Use cookies only when necessary and delete the export when finished.
-
-**`UnicodeEncodeError: 'charmap' codec can't encode character`**
-Windows defaults stdout to cp1252, which cannot represent emoji — including emoji the LLM writes into its own answers. Both entry points call `sys.stdout.reconfigure(encoding="utf-8")` at the top. Keep it there.
-
-**`SARVAM_API_KEY is not set` even though it is**
-`transcriber.py` reads its keys at *module import time*, so `load_dotenv()` must run **before** any `core/` import. Both `main.py` and `app.py` are ordered deliberately — reordering those imports will silently break Sarvam with a misleading error.
-
-**Whisper pegs the CPU**
-Expected — Whisper runs locally in FP32 with no GPU. Use the default Deepgram engine instead, or set a smaller `WHISPER_MODEL`.
-
----
-
-## Notes on cost and privacy
-
-Deepgram, Sarvam, and OpenAI are **cloud services** — audio and transcripts leave your machine. For sensitive recordings, use the `whisper` engine, which transcribes entirely offline (summarisation and chat still call OpenAI).
-
-`downloads/` grows by roughly 100 MB per hour of processed audio and is never cleaned automatically.
-
----
+Deepgram, Sarvam, and OpenAI are cloud services; audio or transcript content sent to them leaves your machine. Whisper transcription runs locally, but title generation, summaries, and chat still use OpenAI.
 
 ## License
 
-MIT — see `LICENSE`.
+MIT. See `LICENSE`.
