@@ -29,19 +29,17 @@ def check(name, fn):
     print(f"  {'✅' if ok else '❌'}  {name:<28} {detail}")
 
 
-# ── 1. environment keys ──────────────────────────────────────────────────────
 print("\nEnvironment")
 for key, needed_for in [
     ("DEEPGRAM_API_KEY", "English transcription"),
     ("SARVAM_API_KEY",   "Hinglish transcription"),
-    ("MISTRAL_API_KEY",  "summary / extraction / chat"),
+    ("OPENAI_API_KEY",   "summary / chat"),
 ]:
     check(key, lambda k=key, n=needed_for: (
         bool(os.getenv(k)), f"set ({n})" if os.getenv(k) else f"MISSING — {n} will fail"
     ))
 
 
-# ── 2. binaries ──────────────────────────────────────────────────────────────
 print("\nBinaries")
 
 def _ffmpeg():
@@ -60,7 +58,6 @@ def _ytdlp():
 check("yt-dlp", _ytdlp)
 
 
-# ── 3. imports ───────────────────────────────────────────────────────────────
 print("\nProject imports")
 
 def _main():
@@ -83,7 +80,6 @@ check("main.py", _main)
 check("app.py", _app)
 
 
-# ── 4. live service calls ────────────────────────────────────────────────────
 print("\nServices (live calls)")
 
 import requests
@@ -126,12 +122,12 @@ def _sarvam():
             os.remove(SILENCE)
 
 
-def _mistral():
+def _openai():
     r = requests.post(
-        "https://api.mistral.ai/v1/chat/completions",
-        headers={"Authorization": f"Bearer {os.getenv('MISTRAL_API_KEY')}",
+        "https://api.openai.com/v1/chat/completions",
+        headers={"Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
                  "Content-Type": "application/json"},
-        json={"model": "mistral-small-latest",
+        json={"model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
               "messages": [{"role": "user", "content": "ok"}], "max_tokens": 2},
         timeout=60,
     )
@@ -140,10 +136,9 @@ def _mistral():
 
 check("Deepgram", _deepgram)
 check("Sarvam",   _sarvam)
-check("Mistral",  _mistral)
+check("OpenAI",   _openai)
 
 
-# ── summary ──────────────────────────────────────────────────────────────────
 failed = [name for ok, name, _ in results if not ok]
 print("\n" + "=" * 58)
 if failed:

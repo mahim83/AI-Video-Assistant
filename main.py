@@ -15,7 +15,6 @@ from datetime import datetime
 from utils.audio_processor import process_input
 from core.transcriber import transcribe_all
 from core.summarizer import summarize, generate_title
-from core.extractor import extract_action_items, extract_key_decisions, extract_questions
 from core.rag_engine import build_rag_chain, load_rag_chain, ask_question
 
 OUTPUT_DIR = "outputs"
@@ -74,15 +73,6 @@ def run_pipeline(source: str, language: str = "english", on_step=None) -> dict:
     step("Writing summary...")
     summary = summarize(transcript)
 
-    step("Extracting action items...")
-    action_item = extract_action_items(transcript)
-
-    step("Extracting key decisions...")
-    decisions = extract_key_decisions(transcript)
-
-    step("Extracting open questions...")
-    questions = extract_questions(transcript)
-
     step("Building searchable index...")
     collection_name = f"{_slug(title)}_{datetime.now():%Y%m%d_%H%M%S}"
     rag_chain = build_rag_chain(transcript, collection_name=collection_name)
@@ -91,9 +81,6 @@ def run_pipeline(source: str, language: str = "english", on_step=None) -> dict:
         "title": title,
         "transcript": transcript,
         "summary": summary,
-        "action_items": action_item,
-        "key_decisions": decisions,
-        "open_questions": questions,
         "collection_name": collection_name,
         "rag_chain": rag_chain,
     }
@@ -103,9 +90,6 @@ def print_result(result: dict):
     print("\n" + "=" * 60)
     print(f"📌 Title: {result['title']}")
     print(f"\n📋 Summary:\n{result['summary']}")
-    print(f"\n✅ Action Items:\n{result['action_items']}")
-    print(f"\n🔑 Key Decisions:\n{result['key_decisions']}")
-    print(f"\n❓ Open Questions:\n{result['open_questions']}")
     print("=" * 60)
 
 
@@ -122,7 +106,6 @@ def chat(rag_chain):
 
 
 if __name__ == "__main__":
-    # CLI entry point
     result = None
     source = None
 
@@ -139,8 +122,8 @@ if __name__ == "__main__":
 
         if answer.isdigit() and 1 <= int(answer) <= len(saved):
             result = load_saved(saved[int(answer) - 1])
-            # Reopens the stored embeddings — no re-download, no re-transcribe.
-            result["rag_chain"] = load_rag_chain(result["collection_name"])
+            # Reopens stored embeddings or rebuilds a missing index from the transcript.
+            result["rag_chain"] = load_rag_chain(result["collection_name"], result["transcript"])
             print(f"Loaded: {result['title']}")
         elif answer.isdigit():
             print(f"No meeting numbered {answer}. Starting a new one instead.")

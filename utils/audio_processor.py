@@ -10,6 +10,7 @@ def download_youtube_audio(url :str) ->str:
     ydl_opts = {
         "format": "bestaudio/best",
         "outtmpl": output_path,
+        "noplaylist": True,
         # The "web"/"tv"/"ios"/"mweb" clients now gate their media URLs behind a
         # GVS PO token; without one YouTube serves the manifest but 403s the
         # actual bytes. "android" and "tv_simply" still hand out playable URLs.
@@ -35,6 +36,16 @@ def download_youtube_audio(url :str) ->str:
         "quiet": True,
         "no_warnings": True,
     }
+    cookie_file = os.getenv("YTDLP_COOKIES", "").strip()
+    browser = os.getenv("YTDLP_BROWSER", "").strip().lower()
+    if cookie_file:
+        cookie_file = os.path.expanduser(cookie_file)
+        if not os.path.isfile(cookie_file):
+            raise FileNotFoundError("YTDLP_COOKIES does not point to an existing cookie file")
+        ydl_opts["cookiefile"] = cookie_file
+    elif browser:
+        ydl_opts["cookiesfrombrowser"] = (browser,)
+
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
 
@@ -52,7 +63,7 @@ def convert_to_wav(input_path: str) -> str:
     """Convert any audio/video file to WAV format using pydub."""
     output_path = os.path.splitext(input_path)[0] + "_converted.wav"
     audio = AudioSegment.from_file(input_path)
-    audio = audio.set_channels(1).set_frame_rate(16000) #16khz
+    audio = audio.set_channels(1).set_frame_rate(16000)
     audio.export(output_path, format="wav")
     return output_path
 

@@ -1,16 +1,18 @@
-# ─── Secrets — never commit ───────────────────────────────────────────────────
+# Secrets: never commit.
 .env
 .env.*
 !.env.example
 *.key
 *.pem
+cookies*.txt
+youtube-cookies*.txt
 
-# ─── Virtual environment ─────────────────────────────────────────────────────
+# Virtual environments
 .venv/
 venv/
 env/
 
-# ─── Python ──────────────────────────────────────────────────────────────────
+# Python caches
 __pycache__/
 *.py[cod]
 *$py.class
@@ -19,7 +21,7 @@ __pycache__/
 .mypy_cache/
 .ipynb_checkpoints/
 
-# ─── Generated data (regenerable, and large) ─────────────────────────────────
+# Generated data: regenerable and large.
 # cached audio (hundreds of MB per run)
 downloads/
 # Chroma embeddings
@@ -33,7 +35,7 @@ outputs/
 *.webm
 *.part
 
-# ─── Editor / OS ─────────────────────────────────────────────────────────────
+# Editor and operating system files
 .vscode/
 .idea/
 tempCodeRunnerFile.py

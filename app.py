@@ -37,6 +37,7 @@ st.markdown("""
   .meeting-sub { opacity: .6; font-size: .88rem; margin-bottom: 1.1rem; }
   .empty-hero { text-align: center; padding: 3.5rem 1rem; opacity: .75; }
   .empty-hero h2 { font-weight: 650; margin-bottom: .4rem; }
+  .st-key-youtube_url [data-testid="InputInstructions"] { display: none; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -49,7 +50,7 @@ def md(text: str) -> str:
     return str(text).replace("$", r"\$")
 
 
-# ── session state ────────────────────────────────────────────────────────────
+# State for the active meeting and its chat.
 st.session_state.setdefault("result", None)
 st.session_state.setdefault("messages", [])
 
@@ -58,7 +59,7 @@ def _reset_chat():
     st.session_state.messages = []
 
 
-# ── sidebar ──────────────────────────────────────────────────────────────────
+# Sidebar controls for sources, processing, and saved meetings.
 with st.sidebar:
     st.markdown("### 🎬 AI Video Assistant")
     st.caption("Transcribe, summarise and interrogate any meeting or video.")
@@ -71,7 +72,7 @@ with st.sidebar:
 
         source = None
         if kind == "YouTube URL":
-            url = st.text_input("YouTube URL", placeholder="https://www.youtube.com/watch?v=...")
+            url = st.text_input("YouTube URL", placeholder="https://www.youtube.com/watch?v=...", key="youtube_url")
             source = url.strip() or None
         else:
             upload = st.file_uploader("Audio or video file", type=["mp3", "wav", "m4a", "mp4", "mkv", "webm", "aac"])
@@ -119,7 +120,7 @@ with st.sidebar:
             if st.button("Load meeting", type="primary", use_container_width=True):
                 with st.spinner("Reopening saved index..."):
                     r = load_saved(pick)
-                    r["rag_chain"] = load_rag_chain(r["collection_name"])
+                    r["rag_chain"] = load_rag_chain(r["collection_name"], r["transcript"])
                     st.session_state.result = r
                     _reset_chat()
                 st.rerun()
@@ -132,14 +133,14 @@ with st.sidebar:
             st.rerun()
 
 
-# ── main panel ───────────────────────────────────────────────────────────────
+# Main panel for the loaded meeting, transcript, summary, and chat.
 result = st.session_state.result
 
 if result is None:
     st.markdown("""
       <div class="empty-hero">
-        <h2>🎬 Nothing loaded yet</h2>
-        <p>Paste a YouTube link in the sidebar, or reopen a saved meeting.</p>
+                <h2>🎬 Nothing loaded yet</h2>
+                <p>Paste a YouTube link in the sidebar, or reopen a saved meeting.</p>
       </div>
     """, unsafe_allow_html=True)
     st.stop()
@@ -155,17 +156,11 @@ c1.metric("Words", f"{len(transcript.split()):,}")
 c2.metric("Characters", f"{len(transcript):,}")
 c3.metric("Est. read time", f"{max(1, len(transcript.split()) // 200)} min")
 
-tabs = st.tabs(["📋 Summary", "✅ Action Items", "🔑 Decisions", "❓ Questions", "📝 Transcript"])
+tabs = st.tabs(["📋 Summary", "📝 Transcript"])
 
 with tabs[0]:
     st.markdown(md(result["summary"]))
 with tabs[1]:
-    st.markdown(md(result["action_items"]))
-with tabs[2]:
-    st.markdown(md(result["key_decisions"]))
-with tabs[3]:
-    st.markdown(md(result["open_questions"]))
-with tabs[4]:
     st.download_button("Download transcript (.txt)", transcript,
                        file_name=f"{result['collection_name']}.txt", mime="text/plain")
     st.text_area("Full transcript", transcript, height=420, label_visibility="collapsed")
@@ -182,7 +177,7 @@ if q := st.chat_input("Ask anything about this meeting..."):
     with st.chat_message("user"):
         st.markdown(md(q))
     with st.chat_message("assistant", avatar="🤖"):
-        with st.spinner("Searching the transcript..."):
+        with st.spinner("Thinking..."):
             try:
                 a = ask_question(result["rag_chain"], q)
             except Exception as e:

@@ -7,13 +7,11 @@ from pydub import AudioSegment
 SARVAM_PIECE_SECONDS = 25
 
 
-# ── Deepgram (default English engine) ────────────────────────────────────────
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 DEEPGRAM_URL = "https://api.deepgram.com/v1/listen"
 DEEPGRAM_MODEL = os.getenv("DEEPGRAM_MODEL", "nova-3")
 
 
-# ── Whisper (local, now opt-in via language="whisper") ───────────────────────
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small")
 
 
