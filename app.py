@@ -6,6 +6,7 @@ except Exception:
 
 import os
 import json
+import html
 import streamlit as st
 
 # Import main first: it calls load_dotenv() *before* importing core/, which
@@ -15,10 +16,12 @@ from main import (
     save_result,
     list_saved,
     load_saved,
+    delete_saved,
     load_rag_chain,
     ask_question,
 )
 from utils.audio_processor import DOWNLOAD_DIR
+from core.retriever import reranker_error
 
 st.set_page_config(
     page_title="AI Video Assistant",
@@ -59,6 +62,30 @@ def _reset_chat():
     st.session_state.messages = []
 
 
+# A modal rather than an inline confirm: after a delete the selectbox moves to
+# the next meeting, and a confirm button left on screen would then target it.
+@st.dialog("Delete meeting?")
+def _confirm_delete(filename: str):
+    name = filename[:-5]
+    st.markdown(f"`{name}` will be removed with its transcript, summary, search index "
+                "and downloaded audio. This cannot be undone.")
+    cancel, confirm = st.columns(2)
+    if cancel.button("Cancel", use_container_width=True):
+        st.rerun()
+    if confirm.button("Delete", type="primary", use_container_width=True):
+        try:
+            delete_saved(filename)
+        except Exception as e:
+            st.error(f"{type(e).__name__}: {e}")
+            return
+        # The loaded chain would otherwise query an index that no longer exists.
+        if st.session_state.result and st.session_state.result.get("collection_name") == name:
+            st.session_state.result = None
+            _reset_chat()
+        st.toast(f"Deleted {name}", icon="🗑️")
+        st.rerun()
+
+
 # Sidebar controls for sources, processing, and saved meetings.
 with st.sidebar:
     st.markdown("### 🎬 AI Video Assistant")
@@ -78,7 +105,9 @@ with st.sidebar:
             upload = st.file_uploader("Audio or video file", type=["mp3", "wav", "m4a", "mp4", "mkv", "webm", "aac"])
             if upload is not None:
                 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-                source = os.path.join(DOWNLOAD_DIR, upload.name)
+                # basename strips any directory components (e.g. "../../x.mp4")
+                # a crafted filename could carry, so the write can't escape DOWNLOAD_DIR.
+                source = os.path.join(DOWNLOAD_DIR, os.path.basename(upload.name))
                 with open(source, "wb") as f:
                     f.write(upload.getbuffer())
 
@@ -124,6 +153,8 @@ with st.sidebar:
                     st.session_state.result = r
                     _reset_chat()
                 st.rerun()
+            if st.button("Delete meeting", use_container_width=True):
+                _confirm_delete(pick)
 
     if st.session_state.result:
         st.divider()
@@ -146,9 +177,12 @@ if result is None:
     st.stop()
 
 
-st.markdown(f'<div class="meeting-title">{result["title"]}</div>', unsafe_allow_html=True)
+# The title comes from the LLM and the source is user-supplied (both are
+# persisted and re-rendered on every reload), so escape before building HTML.
+st.markdown(f'<div class="meeting-title">{html.escape(result["title"])}</div>', unsafe_allow_html=True)
 meta = result.get("saved_at", "just now")
-st.markdown(f'<div class="meeting-sub">{result.get("source", "")} · {meta}</div>', unsafe_allow_html=True)
+source = html.escape(result.get("source", ""))
+st.markdown(f'<div class="meeting-sub">{source} · {meta}</div>', unsafe_allow_html=True)
 
 transcript = result["transcript"]
 c1, c2, c3 = st.columns(3)
@@ -167,6 +201,11 @@ with tabs[1]:
 
 st.divider()
 st.markdown("### 💬 Chat with this meeting")
+if err := reranker_error():
+    st.warning("Reranker unavailable, so answers use hybrid search ranking only. "
+               f"It retries when you next load or process a meeting. ({md(err)})")
+else:
+    st.caption("Retrieval: vector + BM25 hybrid search, reranked by a cross-encoder.")
 
 for m in st.session_state.messages:
     with st.chat_message(m["role"], avatar="🤖" if m["role"] == "assistant" else None):

@@ -85,7 +85,17 @@ def chunk_audio(wav_path : str , chunk_minutes : int = 10) -> list:
     return chunks 
 
 
-def process_input(source: str) -> list:
+def in_download_dir(path: str) -> bool:
+    """
+    True for paths inside DOWNLOAD_DIR. Only files there belong to the app; a
+    local file passed to the CLI lives elsewhere and must never be deleted.
+    """
+    root = os.path.normcase(os.path.abspath(DOWNLOAD_DIR))
+    return os.path.normcase(os.path.abspath(path)).startswith(root + os.sep)
+
+
+def process_input(source: str) -> tuple:
+    """Return (wav_path, chunks): the full WAV and the chunk files cut from it."""
     if source.startswith("http://") or source.startswith("https://"):
         print("Detected YouTube URL. Downloading audio...")
         wav_path = download_youtube_audio(source)
@@ -96,4 +106,4 @@ def process_input(source: str) -> list:
     print("Chunking audio...")
     chunks = chunk_audio(wav_path)
     print(f"Audio ready — {len(chunks)} chunk(s) created.")
-    return chunks
+    return wav_path, chunks

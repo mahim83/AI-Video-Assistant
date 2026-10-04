@@ -1,0 +1,6 @@
+# Bind to the loopback interface only. Without this, Streamlit listens on
+# every network interface by default, so anyone else on the same Wi-Fi or LAN
+# can open the "Network URL" it prints and use the app — spending your API
+# quota and reading your saved meetings — even though nothing was deployed.
+[server]
+address = "localhost"

@@ -3,7 +3,8 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
-from core.vector_store import build_vector_store, load_vector_store, get_retriever
+from core.vector_store import build_vector_store, load_vector_store
+from core.retriever import hybrid_retriever
 
 SYSTEM_PROMPT = """You are a helpful video assistant. Use the transcript context below
 to answer questions about the video's content.
@@ -43,7 +44,7 @@ def format_docs(docs):
 
 def _chain_from(vector_store):
     """Shared LCEL wiring, so build_ and load_ can never drift apart."""
-    retriever = get_retriever(vector_store, k=4)
+    retriever = hybrid_retriever(vector_store)
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", SYSTEM_PROMPT),

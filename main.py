@@ -12,12 +12,17 @@ import os
 import re
 from datetime import datetime
 
-from utils.audio_processor import process_input
+from utils.audio_processor import process_input, in_download_dir
 from core.transcriber import transcribe_all
 from core.summarizer import summarize, generate_title
 from core.rag_engine import build_rag_chain, load_rag_chain, ask_question
+from core.vector_store import delete_vector_store, remove_deleted_dirs
 
 OUTPUT_DIR = "outputs"
+
+# Runs once per process, before any index is opened, so vector folders a
+# previous delete found locked can be removed now.
+remove_deleted_dirs()
 
 
 def _slug(text: str) -> str:
@@ -51,6 +56,22 @@ def load_saved(filename: str) -> dict:
         return json.load(f)
 
 
+def delete_saved(filename: str):
+    """
+    Remove a saved meeting: its search index, its audio in downloads/, and the
+    JSON last, so a failure part-way leaves it listed and the delete can be retried.
+    """
+    meeting = load_saved(filename)
+    delete_vector_store(meeting["collection_name"])
+    # The list comes from a file on disk, so re-check that each path is in
+    # downloads/ before deleting. Meetings saved before audio was recorded
+    # have no list, and their audio stays.
+    for path in meeting.get("audio_files", []):
+        if in_download_dir(path) and os.path.isfile(path):
+            os.remove(path)
+    os.remove(os.path.join(OUTPUT_DIR, filename))
+
+
 def run_pipeline(source: str, language: str = "english", on_step=None) -> dict:
     """on_step(msg) lets a UI report progress; the CLI just prints."""
     def step(msg):
@@ -61,7 +82,7 @@ def run_pipeline(source: str, language: str = "english", on_step=None) -> dict:
     step("starting AI Video Assistant")
 
     step("Downloading and preparing audio...")
-    chunks = process_input(source)
+    wav_path, chunks = process_input(source)
 
     step(f"Transcribing {len(chunks)} chunk(s) with {language}...")
     transcript = transcribe_all(chunks, language)
@@ -82,6 +103,9 @@ def run_pipeline(source: str, language: str = "english", on_step=None) -> dict:
         "transcript": transcript,
         "summary": summary,
         "collection_name": collection_name,
+        # What this run wrote to downloads/ (an uploaded copy, the WAV and its
+        # chunks), so deleting the meeting can remove its audio too.
+        "audio_files": [p for p in [source, wav_path, *chunks] if in_download_dir(p)],
         "rag_chain": rag_chain,
     }
 
