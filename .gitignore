@@ -9,6 +9,7 @@ youtube-cookies*.txt
 
 # Virtual environments
 .venv/
+.venv-eval/
 venv/
 env/
 
@@ -42,6 +43,9 @@ tempCodeRunnerFile.py
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# RAGAS results per question: regenerable, and they repeat transcript chunks.
+evals/*_ragas.json
 
 # demo screenshots — kept locally, not published
 docs/

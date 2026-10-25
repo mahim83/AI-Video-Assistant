@@ -1,0 +1,150 @@
+{
+  "meeting": "understanding_mcp_architecture_and_its_a_20261026_001805.json",
+  "items": [
+    {
+      "question": "What tools are mentioned for accessing and extracting web data?",
+      "evidence": "So they have web access APIs, proxy infra, data feeds.",
+      "reference": "Web access APIs, proxy infra, data feeds, and MCP server."
+    },
+    {
+      "question": "What type of server setup will be used in the client code demonstration?",
+      "evidence": "we'll be using the code where we can have multiple MCP servers because it is very easy to follow as well.",
+      "reference": "a multi server MCP client setup."
+    },
+    {
+      "question": "What are some popular frameworks for building applications that use LLMs?",
+      "evidence": "The most popular one is Lanjain, Langraft.",
+      "reference": "The most popular frameworks for building applications that use LLMs are Lanjain and Langraft."
+    },
+    {
+      "question": "What is MCP and why was it created?",
+      "evidence": "MCP is nothing but it is",
+      "reference": "a standardization framework created by Anthropy to address the need for standardization as companies began exposing their tools."
+    },
+    {
+      "question": "What package helps integrate MCP with lang chain lang graph for building LLM-based applications?",
+      "evidence": "So here you can see lang chain m c p adapters is a package that makes it easy to use MCP with lang chain lang graph, and this is what we'll be using.",
+      "reference": "Lang chain m c p adapters is the package that helps integrate MCP with lang chain lang graph for building LLM-based applications."
+    },
+    {
+      "question": "What is the purpose of standardization in the context of tools?",
+      "evidence": "you need the standardization for that, and that is why MCP.",
+      "reference": "The purpose of standardization in the context of tools is to manage the variety of different tools."
+    },
+    {
+      "question": "What resources are available for learning how to configure the system?",
+      "evidence": "all of the documentation is present.",
+      "reference": "There are example servers, example clients, and documentation available for learning how to configure the system."
+    },
+    {
+      "question": "What is the role of the supervisor agent in the multi-agent architecture?",
+      "evidence": "Supervisor agent controls all communication flow and task delegation, making decisions about which agent to invoke based on the current context and task requirements.",
+      "reference": "The role of the supervisor agent in the multi-agent architecture is to control all communication flow and task delegation, making decisions about which agent to invoke based on the current context and task requirements."
+    },
+    {
+      "question": "What is an example of modifying a tool's function in an application?",
+      "evidence": "Suppose we are creating your own calculator tool.",
+      "reference": "application, modify the tool's function so that it divides instead of multiplies."
+    },
+    {
+      "question": "What type of prompt can be given to the model to help it understand its behavior?",
+      "evidence": "we can also give a prompt over here because this will be very helpful right this is going to help our LLM understand how to behave so this is for further clarity.",
+      "reference": "A prompt can be given to the model to help it understand its behavior."
+    },
+    {
+      "question": "What is MCP compared to in the context of AI applications?",
+      "evidence": "It is like USB C port for AI applications because it is given in the documentation.",
+      "reference": "MCP is compared to a USB C port for AI applications."
+    },
+    {
+      "question": "What is the purpose of creating a supervisor in the code?",
+      "evidence": "we are going to be using four agents, and once we have done that, our end to end stock recommendation system is going to be ready.",
+      "reference": "The purpose of creating a supervisor in the code is to manage the agents for the end-to-end stock recommendation system."
+    },
+    {
+      "question": "What is necessary for effective communication between front end and back end in API calls?",
+      "evidence": "See, when we have REST API calls, what happens like when we send a request from say front end to back end, we know that exactly this is how our API should look like.",
+      "reference": "Standardization."
+    },
+    {
+      "question": "What features does the proposed system include for stock investment?",
+      "evidence": "I want to create end to end system where my system tells that okay, these are the current really promising two stocks.",
+      "reference": "The proposed system includes features for identifying promising stocks, checking current market prices, summarizing related news articles, and providing buy or sell recommendations based on target prices."
+    },
+    {
+      "question": "Who is responsible for calling the tools in the framework?",
+      "evidence": "Our lang chain framework is responsible for calling the tools.",
+      "reference": "Our lang chain framework is responsible for calling the tools."
+    },
+    {
+      "question": "How can different servers operate in relation to each other?",
+      "evidence": "So the different servers that are being exposed by different companies like Grithub or Bright Data or Google or Slack or Discord anything.",
+      "reference": "Different servers can operate on the same computer or on different computers, but as different processes."
+    },
+    {
+      "question": "What is the role of worker agents in the system?",
+      "evidence": "So worker agents will be the agents that will communicate exclusively with the supervisor.",
+      "reference": "Worker agents communicate exclusively with the supervisor and perform specific tasks, with coordination managed by the supervisor agent."
+    },
+    {
+      "question": "What role do tools play in applications that use LLMs?",
+      "evidence": "So our applications should be able to perform some task along with, you know, getting the responses from LLM and then using this task to help our user to fulfill the task that our users wants.",
+      "reference": "Tools in applications that use LLMs help perform tasks and assist users in fulfilling their desired tasks."
+    },
+    {
+      "question": "What is necessary for communication between a client and a server?",
+      "evidence": "there has to be a one is to one connection between the client and the server.",
+      "reference": "A one-to-one connection is necessary for communication between a client and a server."
+    },
+    {
+      "question": "What is the role of the supervisor in the project described?",
+      "evidence": "these agents will be coordinated by a supervisor.",
+      "reference": "The role of the supervisor in the project is to coordinate multiple agents."
+    },
+    {
+      "question": "What specific information does the speaker want from the analysis provided by the agents?",
+      "evidence": "So I just don't want the current market price but I also want say the previous closing price and those things.",
+      "reference": "The speaker wants the analysis to include the current market price and the previous closing price."
+    },
+    {
+      "question": "What types of agents are being created in the video?",
+      "evidence": "So we are going to be creating four agents now.",
+      "reference": "Stock finder agent, market data agent, news analyst agent, and price recommender agent."
+    },
+    {
+      "question": "How does the system respond to user queries?",
+      "evidence": "User is going to send a query, and it can be anything.",
+      "reference": "The system responds to user queries by sending them to LLM, which uses the context to answer the question and return it to the user."
+    },
+    {
+      "question": "What capabilities does the Bright Data tool have in relation to stock market information?",
+      "evidence": "So it can find the current market prices, it can tell you the news, it can summarize all of that.",
+      "reference": "The Bright Data tool can find current market prices, tell you the news, and summarize all of that by scraping information from the internet."
+    },
+    {
+      "question": "What are the three key terms related to MCP that one should know?",
+      "evidence": "So there are three terms that you should know about MCP host, MCP client, and MCP server.",
+      "reference": "MCP host, MCP client, and MCP server."
+    },
+    {
+      "question": "What role do LLMs play in performing tasks within tools?",
+      "evidence": "Some action, some business logic, anything any task that you're performing in your tool plus LLM becomes your agent.",
+      "reference": "LLMs act as agents to perform tasks within tools."
+    },
+    {
+      "question": "How can you use a string to perform division in an LLM?",
+      "evidence": "All you have to do is just, in the string you're going to say multiply two numbers, but what business logic you're going to do is you're actually going to do the division.",
+      "reference": "You can use a string to perform division in an LLM by stating \"multiply two numbers\" in the string, but implementing division in the business logic."
+    },
+    {
+      "question": "What are the top two stock recommendations mentioned in the analysis?",
+      "evidence": "So here are top two recommendations from NSE. It is saying Tata Motors and ICICI Bank.",
+      "reference": "Tata Motors and ICICI Bank."
+    },
+    {
+      "question": "What does the speaker suggest viewers do to fully benefit from the video?",
+      "evidence": "I highly recommend you to watch the entire video so that you don't miss the code part because that is like the best part.",
+      "reference": "The speaker suggests viewers watch the entire video to fully benefit from it."
+    }
+  ]
+}

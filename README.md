@@ -4,7 +4,8 @@ Turn a YouTube video or an audio/video file into a **transcript**, a **title and
 
 - **Transcribe** English with Deepgram, Hindi-English (Hinglish) with Sarvam, or offline with Whisper.
 - **Summarize** the recording into bullet points with OpenAI.
-- **Chat** with the video. Answers are based on the most relevant parts of the transcript, found with hybrid search and reranking.
+- **Chat** with the video. Answers are based on the most relevant parts of the transcript, found with hybrid search and reranking. Follow-up questions such as "who created it?" understand the recent chat.
+- **Measured**: retrieval and answer quality are evaluated with a retrieval benchmark and RAGAS. See [Evaluation](#evaluation).
 - **Keep** your meetings: reopen them later, download the transcript, or delete them with all their data.
 - Use it as a **web app** (Streamlit) or from the **terminal**.
 
@@ -35,12 +36,13 @@ flowchart TD
     end
 
     subgraph ASK["Part 2: Ask a question (every chat message)"]
-        Q["Your question"] --> VEC["Vector search<br/>top 20 by meaning"]
-        Q --> KW["BM25 keyword search<br/>top 20 by shared words"]
+        Q["Your question"] --> RW["Follow-up? Rewrite it as a standalone question<br/>OpenAI, using the recent chat"]
+        RW --> VEC["Vector search<br/>top 20 by meaning"]
+        RW --> KW["BM25 keyword search<br/>top 20 by shared words"]
         VEC --> RRF["Merge the two rankings<br/>Reciprocal Rank Fusion"]
         KW --> RRF
         RRF --> RR["Cross-encoder reranks them<br/>keeps the best 4 chunks"]
-        RR --> LLM["OpenAI writes the answer<br/>rules + 4 chunks + question"]
+        RR --> LLM["OpenAI writes the answer<br/>rules + 4 chunks + recent chat + question"]
         LLM --> ANS["Answer in the chat"]
     end
 
@@ -50,7 +52,7 @@ flowchart TD
     SAVE -.->|"reopening a meeting:<br/>rebuild index if missing"| DB
 
     classDef cloud fill:#ffe8cc,stroke:#d9480f,color:#000
-    class DG,SV,TITLE,SUM,LLM cloud
+    class DG,SV,TITLE,SUM,RW,LLM cloud
 ```
 
 Orange steps send data to a cloud service. Everything else runs on your computer.
@@ -69,12 +71,13 @@ Orange steps send data to a cloud service. Everything else runs on your computer
 
 ### Part 2: Answering a question
 
-1. **Find candidates in two ways.**
-   - Vector search returns the 20 chunks closest in meaning to your question, even when the wording differs.
+1. **Rewrite follow-ups.** From the second question on, OpenAI rewrites your question with the recent chat so it stands on its own: after "What is MCP?", the question "Who created it?" is searched as "Who created the Model Context Protocol (MCP)?". The first question is searched as you typed it.
+2. **Find candidates in two ways.**
+   - Vector search returns the 20 chunks closest in meaning to the question, even when the wording differs.
    - BM25 keyword search returns the 20 chunks that share the most words with it. It ignores filler words such as "what" or "say", so exact names, numbers and jargon aren't missed.
-2. **Merge the two lists.** Reciprocal Rank Fusion combines both rankings into one list of 20 to 40 candidates. Chunks that rank high in both searches come first.
-3. **Rerank.** A cross-encoder reads your question together with each candidate and scores how well the candidate answers it. The best **4** chunks (about 2,000 characters) are kept.
-4. **Answer.** OpenAI receives a set of rules, the 4 chunks and your question, and writes the answer.
+3. **Merge the two lists.** Reciprocal Rank Fusion combines both rankings into one list of 20 to 40 candidates. Chunks that rank high in both searches come first.
+4. **Rerank.** A cross-encoder reads the question together with each candidate and scores how well the candidate answers it. The best **4** chunks (about 2,000 characters) are kept.
+5. **Answer.** OpenAI receives a set of rules, the 4 chunks, the last 3 questions and answers, and your question, and writes the answer.
 
 The rules tell the model to:
 
@@ -85,7 +88,7 @@ The rules tell the model to:
 
 Keep in mind:
 
-- Each question is answered on its own. Earlier messages are not sent, so a follow-up such as "tell me more" has no context.
+- The chat remembers the last 3 questions and answers. Older messages are not sent, and a follow-up costs one extra small OpenAI call for the rewrite.
 - The model sees only 4 chunks. Questions about the whole video, such as "list every topic", can get incomplete answers. Use the Summary tab for an overview.
 
 ### Terms used above
@@ -225,10 +228,78 @@ Keep `.env` private. It is excluded from Git.
 | Service | What it receives |
 |---|---|
 | Deepgram or Sarvam | The audio, when you pick that engine. |
-| OpenAI | The first 2,000 characters of the transcript (title), the whole transcript in sections (summary), and, for each chat message, your question plus 4 transcript chunks. |
+| OpenAI | The first 2,000 characters of the transcript (title), the whole transcript in sections (summary), and, for each chat message, your question, 4 transcript chunks and the last 3 questions and answers of the chat. |
 | Hugging Face | Nothing about your videos. The embedding and reranker models are downloaded from it once. |
 
 Whisper, embeddings, search, reranking and the Chroma index run on your computer. Even when you transcribe with Whisper, the title, summary and chat still use OpenAI.
+
+## Evaluation
+
+Two scripts in `evals/` measure how well the chat works. Both use question sets made from real videos:
+
+| Question set | Video | Length | Questions |
+|---|---|---|---|
+| `evals/dataset.json` | [Lessons from Brazil for India's economy](https://www.youtube.com/watch?v=8bbPr5-hDRA) | 28 chunks | 25 |
+| `evals/dataset_mcp.json` | [Understanding MCP architecture](https://www.youtube.com/watch?v=NF2aRqIlYNE) | 90 chunks (about 50 minutes) | 29 |
+
+Each question was written by OpenAI from a random transcript chunk, together with the exact sentence that answers it. Questions whose sentence was not copied word for word are dropped automatically. In the MCP set, questions too vague to ask without seeing the chunk (such as "What does the code do?") were also removed by hand.
+
+### Retrieval: is the right chunk found?
+
+`evals/eval_retrieval.py` checks whether the chunk holding the answer sentence is among the chunks returned. It runs locally and costs nothing.
+
+| Ranker | Brazil hit@1 | Brazil hit@4 | MCP hit@1 | MCP hit@4 | MCP MRR@10 |
+|---|---|---|---|---|---|
+| Vector search only | 0.64 | 0.92 | 0.48 | 0.79 | 0.65 |
+| Hybrid (vector + BM25) | 0.72 | 1.00 | 0.66 | 0.93 | 0.76 |
+| **Hybrid + reranker (used by the app)** | **0.88** | **1.00** | **0.83** | **1.00** | **0.88** |
+
+- hit@k is the share of questions whose answer chunk is in the top k. The chat sends the top 4 to OpenAI, so hit@4 is the share of questions the model can answer.
+- MRR@10 is the average of 1 / rank of the answer chunk.
+- On the longer MCP video, vector search alone misses the answer for 6 of 29 questions. Hybrid search and reranking bring all 29 into the top 4.
+
+### Answers: are they grounded and on point?
+
+`evals/eval_ragas.py` answers each question the way the app does, then [RAGAS](https://docs.ragas.io) scores the answers with GPT-4o as the judge. GPT-4o is a different model from the one that writes the answers, because a model tends to rate its own output generously.
+
+| Metric | What it measures | Brazil | MCP |
+|---|---|---|---|
+| Faithfulness | Every claim in the answer is supported by the 4 chunks | 0.97 | 0.93 |
+| Answer relevancy | The answer addresses the question | 0.87 | 0.92 |
+| Context precision | The useful chunks are ranked above the others | 0.94 | 0.91 |
+| Context recall | The 4 chunks contain everything the reference answer says | 1.00 | 1.00 |
+
+Every claim in the answers flagged as unfaithful was found in the 4 chunks when checked by hand, so the lower faithfulness scores come from the judge, not from invented facts.
+
+Keep in mind:
+
+- The question sets are small and come from two videos. A difference of one question is 0.03 to 0.04.
+- The questions are written from single chunks and stand alone. Follow-up questions and questions about the whole video are not measured yet.
+
+### Run the evaluation
+
+The scripts read a saved meeting from `outputs/`, so first process the video in the app. The retrieval evaluation runs in the app's environment:
+
+```bash
+python -m evals.eval_retrieval run outputs/<meeting>.json --dataset evals/dataset_mcp.json
+```
+
+Make a question set for another meeting with `generate`, then check the questions before using them:
+
+```bash
+python -m evals.eval_retrieval generate outputs/<meeting>.json --n 40 --dataset evals/dataset_<name>.json
+```
+
+RAGAS conflicts with the app's packages, so it runs in its own environment. `references` adds a reference answer to each question and only needs to run once per question set:
+
+```powershell
+python -m venv .venv-eval
+.\.venv-eval\Scripts\python -m pip install -r requirements-eval.txt
+.\.venv-eval\Scripts\python -m evals.eval_ragas references outputs\<meeting>.json --dataset evals\dataset_mcp.json
+.\.venv-eval\Scripts\python -m evals.eval_ragas run outputs\<meeting>.json --dataset evals\dataset_mcp.json --limit 3
+```
+
+Leave out `--limit 3` for a full run. Scores for each question are written next to the question set, for example `evals/dataset_mcp_ragas.json`. The judge model can be changed with `--judge` or `RAGAS_JUDGE_MODEL`.
 
 ## YouTube sign-in errors
 
@@ -247,6 +318,7 @@ Public videos usually download without signing in. If YouTube asks you to sign i
 | "Reranker unavailable" warning in the chat | The reranker is downloaded on first use, so connect to the internet. The app tries again the next time you load or process a meeting. |
 | Many `No module named 'torchvision'` tracebacks in the terminal | Harmless. Streamlit's file watcher inspects the installed `transformers` package; the app works normally. |
 | YouTube asks you to sign in | See [YouTube sign-in errors](#youtube-sign-in-errors). |
+| `OpenAIConnectionError: Connection error` in the chat | Your computer couldn't reach OpenAI, usually because the internet dropped or a VPN changed. Ask again. If it keeps failing, reload the meeting or restart the app. |
 
 ## Project structure
 
@@ -260,12 +332,17 @@ AI Video Assistant/
 │   ├── summarizer.py       Title and summary with OpenAI
 │   ├── vector_store.py     Chunking, embeddings and the Chroma index of each meeting
 │   ├── retriever.py        Hybrid search (vector + BM25), fusion and reranking
-│   └── rag_engine.py       Chat rules and the answer chain
+│   └── rag_engine.py       Chat rules, follow-up rewriting and the answer chain
 ├── utils/
 │   └── audio_processor.py  Downloads, converts and cuts audio
+├── evals/
+│   ├── eval_retrieval.py   Retrieval benchmark (hit@k, MRR) and question generation
+│   ├── eval_ragas.py       Answer evaluation with RAGAS
+│   └── dataset*.json       Question sets with evidence and reference answers
 ├── .streamlit/config.toml  Keeps the web app on your own computer
 ├── .env.example            Template for your keys and settings
-└── requirements.txt        Python dependencies
+├── requirements.txt        Python dependencies
+└── requirements-eval.txt   Dependencies for the RAGAS evaluation (separate venv)
 ```
 
 ## License

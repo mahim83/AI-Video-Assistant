@@ -1,0 +1,28 @@
+# Evaluation-only dependencies, installed into a separate venv (.venv-eval).
+#
+#   python -m venv .venv-eval
+#   .\.venv-eval\Scripts\Activate.ps1
+#   python -m pip install -r requirements-eval.txt
+#
+# Kept apart from requirements.txt because ragas pins older openai,
+# langchain-openai and huggingface_hub than the app uses; installing it into
+# the app's venv would downgrade them.
+
+ragas>=0.4.3
+
+# Retrieval stack. The first five are pinned to what the app runs, so eval
+# scores describe the same chunking, embeddings and search as the real app.
+chromadb==1.5.9
+langchain-chroma==1.1.0
+langchain-text-splitters==1.1.2
+sentence-transformers==5.7.0
+rank-bm25==0.2.2
+
+# Imported by core/ at module level.
+langchain-core
+langchain-openai
+# ragas 0.4.3 imports langchain_community.chat_models.vertexai, which
+# langchain-community 0.4 removed, so `import ragas` fails there. Drop this pin
+# once a ragas release stops importing it.
+langchain-community==0.3.31
+python-dotenv
