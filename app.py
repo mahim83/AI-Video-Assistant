@@ -205,21 +205,28 @@ if err := reranker_error():
     st.warning("Reranker unavailable, so answers use hybrid search ranking only. "
                f"It retries when you next load or process a meeting. ({md(err)})")
 else:
-    st.caption("Retrieval: vector + BM25 hybrid search, reranked by a cross-encoder.")
+    st.caption("Retrieval: vector + BM25 hybrid search, reranked by a cross-encoder. "
+               "Follow-up questions use the last 3 exchanges.")
 
 for m in st.session_state.messages:
     with st.chat_message(m["role"], avatar="🤖" if m["role"] == "assistant" else None):
         st.markdown(md(m["content"]))
 
 if q := st.chat_input("Ask anything about this meeting..."):
+    # Failed turns stay on screen but aren't sent back: an error text would
+    # read to the model as something it said, and the question got no answer.
+    history = [m for m in st.session_state.messages if not m.get("failed")]
     st.session_state.messages.append({"role": "user", "content": q})
     with st.chat_message("user"):
         st.markdown(md(q))
     with st.chat_message("assistant", avatar="🤖"):
         with st.spinner("Thinking..."):
+            failed = False
             try:
-                a = ask_question(result["rag_chain"], q)
+                a = ask_question(result["rag_chain"], q, history)
             except Exception as e:
-                a = f"⚠️ {type(e).__name__}: {e}"
+                a, failed = f"⚠️ {type(e).__name__}: {e}", True
         st.markdown(md(a))
-    st.session_state.messages.append({"role": "assistant", "content": a})
+    if failed:
+        st.session_state.messages[-1]["failed"] = True
+    st.session_state.messages.append({"role": "assistant", "content": a, "failed": failed})

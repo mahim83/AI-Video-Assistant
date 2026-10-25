@@ -1,10 +1,29 @@
 import os
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from core.vector_store import build_vector_store, load_vector_store
 from core.retriever import hybrid_retriever
+
+# Recent messages sent with each question: 3 questions and their answers.
+# Enough for follow-ups, small enough to keep each call cheap.
+HISTORY_MESSAGES = 6
+
+# The chat goes in as quoted text, not as chat messages: given a real
+# conversation, the model continues it and answers instead of rewriting.
+CONDENSE_PROMPT = """Rewrite the latest message below as a standalone question that
+can be understood without the chat, for searching a video transcript.
+Resolve references such as "it", "that", "this tool" or "tell me more" using the chat.
+Keep "he", "she" or "the speaker" unchanged unless the chat clearly names who is meant.
+If the message is already standalone, or is a greeting or thanks, return it unchanged.
+Do not answer it. Reply with the rewritten message only.
+
+Chat:
+{chat}
+
+Latest message: {question}"""
 
 SYSTEM_PROMPT = """You are a helpful video assistant. Use the transcript context below
 to answer questions about the video's content.
@@ -45,20 +64,34 @@ def format_docs(docs):
 def _chain_from(vector_store):
     """Shared LCEL wiring, so build_ and load_ can never drift apart."""
     retriever = hybrid_retriever(vector_store)
+    llm = get_llm()
 
-    prompt = ChatPromptTemplate.from_messages([
+    condense = ChatPromptTemplate.from_template(CONDENSE_PROMPT) | llm | StrOutputParser()
+
+    answer = ChatPromptTemplate.from_messages([
         ("system", SYSTEM_PROMPT),
+        MessagesPlaceholder("history"),
         ("human", "{question}"),
-    ])
+    ]) | llm | StrOutputParser()
+
+    def search_query(inputs):
+        # "Who created it?" would search the transcript for "it", so a
+        # follow-up is rewritten first. The first question has nothing to
+        # resolve, so it skips that extra call.
+        if not inputs["history"]:
+            return inputs["question"]
+        chat = "\n".join(
+            f"{'User' if isinstance(m, HumanMessage) else 'Assistant'}: {m.content}"
+            for m in inputs["history"]
+        )
+        return condense.invoke({"chat": chat, "question": inputs["question"]})
 
     return (
-        {
-            "context": retriever | RunnableLambda(format_docs),
-            "question": RunnablePassthrough(),
-        }
-        | prompt
-        | get_llm()
-        | StrOutputParser()
+        RunnablePassthrough.assign(search_query=RunnableLambda(search_query))
+        | RunnablePassthrough.assign(
+            context=lambda x: format_docs(retriever.invoke(x["search_query"]))
+        )
+        | answer
     )
 
 
@@ -75,7 +108,15 @@ def load_rag_chain(collection_name: str = None, transcript: str = None):
     return _chain_from(vector_store)
 
 
-def ask_question(rag_chain, question: str) -> str:
+def ask_question(rag_chain, question: str, history: list = None) -> str:
+    """
+    history: earlier messages as {"role": "user" | "assistant", "content": str},
+    oldest first. Only the last HISTORY_MESSAGES are sent.
+    """
     # No printing here — the caller owns display, otherwise every answer
     # gets echoed twice (once here, once by main.py's chat loop).
-    return rag_chain.invoke(question)
+    messages = [
+        HumanMessage(m["content"]) if m["role"] == "user" else AIMessage(m["content"])
+        for m in (history or [])[-HISTORY_MESSAGES:]
+    ]
+    return rag_chain.invoke({"question": question, "history": messages})

@@ -119,6 +119,7 @@ def print_result(result: dict):
 
 def chat(rag_chain):
     print("\n💬 Chat with your meeting (type 'exit' to quit)\n")
+    history = []
     while True:
         question = input("You: ").strip()
         if question.lower() in ["exit", "quit", "q"]:
@@ -126,7 +127,9 @@ def chat(rag_chain):
             break
         if not question:
             continue
-        print(f"\n🤖 Assistant: {ask_question(rag_chain, question)}\n")
+        answer = ask_question(rag_chain, question, history)
+        history += [{"role": "user", "content": question}, {"role": "assistant", "content": answer}]
+        print(f"\n🤖 Assistant: {answer}\n")
 
 
 if __name__ == "__main__":
