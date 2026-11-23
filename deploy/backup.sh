@@ -4,6 +4,8 @@
 #   15 3 * * * /opt/ai-video-assistant/deploy/backup.sh >> /var/log/ai-video-backup.log 2>&1
 # Set RCLONE_REMOTE (e.g. "b2:my-bucket/ai-video") to copy each backup off the server.
 set -eu
+# Backups hold every user's transcripts: readable by the owner only.
+umask 077
 cd "$(dirname "$0")/.."
 
 STAMP=$(date -u +%Y%m%d-%H%M%S)

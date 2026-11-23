@@ -21,15 +21,39 @@ class FakeUser(dict):
         return bool(self)
 
 
-def run(monkeypatch, signed_in_as=None, verified=True):
+STRONG_SECRET = "s" * 48
+
+
+def run(monkeypatch, signed_in_as=None, verified=True, sub=None, secret=STRONG_SECRET):
     monkeypatch.setattr(core.auth, "_auth_configured", lambda: True)
-    claims = {"email": signed_in_as, "email_verified": verified} if signed_in_as else {}
+    monkeypatch.setattr(core.auth, "_cookie_secret", lambda: secret)
+    claims = {"email": signed_in_as, "email_verified": verified, "sub": sub} if signed_in_as else {}
     monkeypatch.setattr(streamlit, "user", FakeUser(claims))
     return AppTest.from_file(APP, default_timeout=300).run()
 
 
 def texts(at):
     return " ".join(e.value for e in list(at.markdown) + list(at.error) + list(at.caption))
+
+
+@pytest.mark.parametrize("secret", ["replace-with-a-long-random-string", "short", ""])
+def test_weak_cookie_secret_stops_the_app(monkeypatch, secret):
+    at = run(monkeypatch, "owner@example.com", secret=secret)
+    assert "cookie_secret" in texts(at)
+    assert not at.sidebar.radio and not at.button
+
+
+def test_email_bound_to_first_google_account(monkeypatch):
+    assert run(monkeypatch, "friend@example.com", sub="google-111").sidebar.radio
+    at = run(monkeypatch, "friend@example.com", sub="google-222")
+    assert "different Google account" in texts(at)
+    assert not at.sidebar.radio
+
+
+def test_denied_logins_are_logged_once_per_hour(monkeypatch):
+    run(monkeypatch, "stranger@example.com")
+    run(monkeypatch, "stranger@example.com")   # a new session, same hour
+    assert [r["action"] for r in db.recent_audit()].count("login_denied") == 1
 
 
 def test_signed_out_sees_only_sign_in(monkeypatch):

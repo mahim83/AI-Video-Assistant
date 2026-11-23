@@ -62,6 +62,9 @@ def _reset_chat():
 # the next meeting, and a confirm button left on screen would then target it.
 @st.dialog("Delete meeting?")
 def _confirm_delete(filename: str):
+    # A dialog is a fragment: clicks inside it rerun only this function, not
+    # the top of the script, so check the user again here.
+    space = storage.user_space(require_user().id)
     name = filename[:-5]
     st.markdown(f"`{name}` will be removed with its transcript, summary and search index. "
                 "This cannot be undone.")
@@ -97,6 +100,7 @@ def _process(url, upload, language: str):
         guardrails.check_can_start_video(user)
 
         with guardrails.job_slot(user.id), storage.job_dir(space) as work:
+            guardrails.start_attempt(user)
             if upload is not None:
                 # A fixed name inside this job's own folder: the user's filename
                 # never becomes a path, and two uploads can't overwrite each other.
@@ -334,7 +338,8 @@ tabs = st.tabs(["Summary", "Transcript"])
 
 with tabs[0]:
     with st.container(key="reading_summary"):
-        st.markdown(md(result["summary"]))
+        # The summary is LLM output over an untrusted transcript, like an answer.
+        st.markdown(md(guardrails.clean_answer(result["summary"])))
 with tabs[1]:
     with st.container(key="reading_transcript"):
         st.download_button("Download transcript", transcript, icon=":material/download:",

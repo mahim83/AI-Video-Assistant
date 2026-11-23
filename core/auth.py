@@ -4,6 +4,8 @@ support (st.login, configured in .streamlit/secrets.toml). The identity it
 returns is checked against the invite list on every rerun, so access granted
 or revoked by an admin applies at the user's next click.
 """
+import time
+
 import streamlit as st
 
 from core import db, ui
@@ -12,6 +14,9 @@ from core.settings import get_settings
 from core.users import LOCAL_USER, User, authorize
 
 LOOPBACK = ("localhost", "127.0.0.1", "::1")
+# The placeholder in .streamlit/secrets.toml.example.
+EXAMPLE_COOKIE_SECRET = "replace-with-a-long-random-string"
+MIN_COOKIE_SECRET_CHARS = 32
 
 
 def _auth_configured() -> bool:
@@ -19,6 +24,25 @@ def _auth_configured() -> bool:
         return "auth" in st.secrets
     except Exception:   # no secrets.toml at all
         return False
+
+
+def _cookie_secret() -> str:
+    return str(st.secrets["auth"].get("cookie_secret", ""))
+
+
+def cookie_secret_problem(secret: str):
+    """
+    The login cookie is signed with cookie_secret. Anyone who knows or guesses
+    it can forge a cookie for any email, including an admin's, so a weak one
+    must stop the app instead of only logging a warning.
+    """
+    if secret == EXAMPLE_COOKIE_SECRET or len(secret) < MIN_COOKIE_SECRET_CHARS:
+        return (
+            "cookie_secret in .streamlit/secrets.toml is missing, the example value, or shorter "
+            f"than {MIN_COOKIE_SECRET_CHARS} characters. Generate one with "
+            "python3 -c \"import secrets; print(secrets.token_urlsafe(48))\" and restart the app."
+        )
+    return None
 
 
 def require_user() -> User:
@@ -46,17 +70,25 @@ def require_user() -> User:
         )
         st.stop()
 
+    if problem := cookie_secret_problem(_cookie_secret()):
+        st.error(problem)
+        st.stop()
+
     if not st.user.is_logged_in:
         ui.sign_in_page()
         st.stop()
 
     email = st.user.get("email")
     try:
-        user = authorize(email, st.user.get("email_verified"))
+        user = authorize(email, st.user.get("email_verified"), st.user.get("sub"))
     except AccessDenied as e:
+        label = str(email or "?")
+        # At most one row per email per hour, so scripted sign-ins can't push
+        # real events out of the admin's view.
         if st.session_state.get("_denied_email") != email:
             st.session_state["_denied_email"] = email
-            db.audit("login_denied", email=str(email or "?"))
+            if not db.audited_since("login_denied", label, time.time() - 3600):
+                db.audit("login_denied", email=label)
         ui.denied_page(str(e))
         st.stop()
 

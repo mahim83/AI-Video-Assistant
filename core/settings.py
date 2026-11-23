@@ -77,7 +77,7 @@ def get_settings() -> Settings:
         admin_emails=_set("ADMIN_EMAILS"),
         allowed_emails=_set("ALLOWED_EMAILS"),
         max_video_minutes=_int("MAX_VIDEO_MINUTES", 90),
-        max_upload_mb=_int("MAX_UPLOAD_MB", 200),
+        max_upload_mb=_int("MAX_UPLOAD_MB", 100),
         videos_per_day=_int("VIDEOS_PER_DAY", 5),
         audio_minutes_per_day=_int("AUDIO_MINUTES_PER_DAY", 180),
         questions_per_day=_int("QUESTIONS_PER_DAY", 150),

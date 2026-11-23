@@ -8,7 +8,8 @@
 # this address is a loopback one.
 address = "localhost"
 # MB. Keep at or above MAX_UPLOAD_MB; the app enforces its own limit too.
-maxUploadSize = 200
+# Uploads are held in memory, so this stays modest for a 2 GB server.
+maxUploadSize = 100
 enableXsrfProtection = true
 enableCORS = true
 

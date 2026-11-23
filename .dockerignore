@@ -4,20 +4,26 @@
 .venv-eval
 venv
 env
-__pycache__
-*.py[cod]
+**/__pycache__
+**/*.py[cod]
 .pytest_cache
+.claude
+.vscode
+.idea
 
 # Secrets: mounted or passed at run time, never baked into the image.
-.env
-.env.*
+# "**/" so a copy in any subfolder is excluded too.
+**/.env
+**/.env.*
 .streamlit/secrets.toml
-*.key
-*.pem
-cookies*.txt
+**/*.key
+**/*.pem
+**/*cookies*.txt
 
-# Data: lives in the mounted ./data volume.
+# Data and backups: users' meetings live in the mounted ./data volume, and
+# backups/ is written next to this file by deploy/backup.sh.
 data
+backups
 outputs
 downloads
 vector_db
@@ -25,11 +31,9 @@ vector_db
 docs
 tests
 evals
-*.pdf
-*.wav
-*.mp3
-*.mp4
-*.m4a
-*.webm
-.vscode
-.idea
+**/*.pdf
+**/*.wav
+**/*.mp3
+**/*.mp4
+**/*.m4a
+**/*.webm

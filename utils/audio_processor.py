@@ -13,6 +13,22 @@ class MediaError(UserFacingError):
     """The input couldn't be read as audio. The message is safe to show."""
 
 
+# Audio decoders FFmpeg may use on untrusted files. Video and other streams
+# are refused outright, so crafted video data never reaches a video decoder;
+# the audio track is still extracted.
+AUDIO_CODECS = ",".join([
+    "aac", "aac_fixed", "mp3", "mp3float", "opus", "libopus", "vorbis", "libvorbis",
+    "flac", "alac", "pcm_s16le", "pcm_s24le", "pcm_s32le", "pcm_f32le", "pcm_u8",
+    "pcm_s16be", "pcm_mulaw", "pcm_alaw",
+])
+# Extension of a YouTube download -> FFmpeg demuxer, so downloads are decoded
+# with a fixed format too rather than whatever FFmpeg guesses.
+DOWNLOAD_FORMATS = {".m4a": "mp4", ".mp4": "mp4", ".webm": "webm", ".mp3": "mp3", ".opus": "ogg", ".ogg": "ogg"}
+# Far above a 90-minute audio stream (~100 MB); stops a runaway download.
+MAX_DOWNLOAD_BYTES = 400 * 1024 * 1024
+FFMPEG_TIMEOUT_SECONDS = 600
+
+
 def _ydl_opts(out_dir: str = None) -> dict:
     opts = {
         "format": "bestaudio/best",
@@ -33,6 +49,7 @@ def _ydl_opts(out_dir: str = None) -> dict:
         },
         "socket_timeout": 30,
         "retries": 5,
+        "max_filesize": MAX_DOWNLOAD_BYTES,
         "http_headers": {
             "Accept-Language": "en-US,en;q=0.9",
         },
@@ -98,14 +115,14 @@ def convert_to_wav(input_path: str, out_dir: str = None, input_format: str = Non
     cmd = [shutil.which("ffmpeg") or "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
            "-y", "-protocol_whitelist", "file"]
     if input_format:
-        cmd += ["-f", input_format]
-    cmd += ["-i", input_path, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le"]
+        cmd += ["-format_whitelist", input_format, "-codec_whitelist", AUDIO_CODECS, "-f", input_format]
+    cmd += ["-i", input_path, "-vn", "-sn", "-dn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le"]
     if max_minutes:
         cmd += ["-t", str(int(max_minutes * 60) + 1)]
     cmd.append(output_path)
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired:
         raise MediaError("Converting the audio took too long. Try a shorter or smaller file.")
     if result.returncode != 0 or not os.path.isfile(output_path):
@@ -161,6 +178,7 @@ def process_input(source: str, work_dir: str, input_format: str = None,
                 )
         print("Detected YouTube URL. Downloading audio...")
         source = download_youtube_audio(source, work_dir)
+        input_format = DOWNLOAD_FORMATS.get(os.path.splitext(source)[1].lower())
     else:
         print("Detected local file. Converting to WAV...")
 

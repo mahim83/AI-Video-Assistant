@@ -36,6 +36,11 @@ CREATE TABLE IF NOT EXISTS audit (
     detail  TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS audit_by_ts ON audit (ts);
+CREATE TABLE IF NOT EXISTS identities (
+    email      TEXT PRIMARY KEY,
+    sub        TEXT NOT NULL,
+    first_seen REAL NOT NULL
+);
 """
 
 _init_lock = threading.Lock()
@@ -117,6 +122,15 @@ def audit(action: str, user=None, detail: str = "", email: str = None):
         # An audit failure must not take the request down with it.
         log.exception("audit write failed: action=%s user=%s", action, user_id)
     log.info("audit action=%s user=%s detail=%s", action, user_id, detail[:200])
+
+
+def audited_since(action: str, email: str, since: float) -> bool:
+    with connect() as con:
+        row = con.execute(
+            "SELECT 1 FROM audit WHERE action = ? AND email = ? AND ts >= ? LIMIT 1",
+            (action, email, since),
+        ).fetchone()
+    return row is not None
 
 
 def recent_audit(limit: int = 200) -> list:

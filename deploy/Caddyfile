@@ -9,13 +9,24 @@
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		# Images only from this site: even if an answer or summary smuggled in
+		# an image pointing elsewhere, the browser would not load it. Scripts and
+		# styles are left to Streamlit, which needs inline ones.
+		Content-Security-Policy "img-src 'self' data: blob:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self' https://accounts.google.com"
 		-Server
 	}
 
-	# Slightly above MAX_UPLOAD_MB (200 MB by default); raise both together.
+	# Streamlit's metrics page needs no sign-in; nobody outside needs it.
+	respond /_stcore/metrics* 404
+
+	# Slightly above MAX_UPLOAD_MB (100 MB by default); raise both together.
 	request_body {
-		max_size 210MB
+		max_size 110MB
 	}
 
-	reverse_proxy app:8501
+	reverse_proxy app:8501 {
+		# Streamlit sets its login cookie without the Secure flag; add it so
+		# the cookie is never sent over plain HTTP.
+		header_down Set-Cookie "^(.*)$" "$1; Secure"
+	}
 }

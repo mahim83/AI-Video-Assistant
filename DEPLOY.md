@@ -69,7 +69,9 @@ cp .env.example .env
 cp .streamlit/secrets.toml.example .streamlit/secrets.toml
 chmod 600 .env .streamlit/secrets.toml
 
-# The container runs as user 10001, which must be able to write here.
+# The container runs as user 10001: it must be able to read the sign-in
+# secrets and write the data folder.
+sudo chown 10001:10001 .streamlit/secrets.toml
 mkdir -p data && sudo chown 10001:10001 data
 ```
 
@@ -132,7 +134,9 @@ sudo crontab -e
 ```
 
 It writes `backups/data-<date>.tar.gz` and keeps 14 days of them. To keep a copy
-off the server, which you should, install [rclone](https://rclone.org/), set up a
+off the server, which you should, install [rclone](https://rclone.org/), set up an
+encrypted remote (rclone's `crypt` type, since backups contain every user's
+transcripts) on top of a
 remote such as Backblaze B2, Cloudflare R2 or S3, and add
 `RCLONE_REMOTE=b2:your-bucket/ai-video` before the command in the crontab line.
 
@@ -174,9 +178,11 @@ docker compose up -d --build
 | Authentication | Google sign-in (OIDC) through Streamlit's `st.login`. Emails must be verified by Google. |
 | Authorization | Invite-only list (`ADMIN_EMAILS`, `ALLOWED_EMAILS`, plus users added in Admin), checked on every interaction. Roles: `admin` and `user`. Admin actions are checked server-side, not only hidden in the UI. |
 | Data isolation | Each user's meetings and search indexes live in their own folder. Meeting names are validated so no request can reach outside it. |
-| Input guardrails | YouTube links only, checked by host and by restricting yt-dlp to its YouTube extractor, so no server paths or internal addresses. Uploads are checked by type and size and decoded with the format forced and plain file access only. Length cap before download. Question length cap. |
+| Upload gate | Streamlit's upload endpoint accepts files from any page session. `server.py` puts a gate in front of it (`core/upload_gate.py`): an upload needs a valid sign-in cookie for an invited user, with one upload at a time per user and a few per 10 minutes. Anonymous visitors can't fill the server's memory. |
+| Input guardrails | YouTube links only, checked by host and by restricting yt-dlp to its YouTube extractor, so no server paths or internal addresses. Uploads are checked by type and size (100 MB) and decoded with the format forced, audio decoders only, and plain file access only. Length cap before download. Question length cap. Every processing attempt counts toward a daily limit, failed ones included. |
 | Spend guardrails | Per-user daily limits on videos, audio minutes and questions, a per-minute question limit, at most `MAX_CONCURRENT_JOBS` videos at once, one per user, and a cap on answer length. |
-| LLM guardrails | Answers only about the video and declines unrelated requests. The transcript is marked as untrusted data inside delimiters it can't close. Images are removed from answers so they can't leak data through URLs. |
+| LLM guardrails | Answers only about the video and declines unrelated requests. The transcript is marked as untrusted data inside delimiters it can't close, in the chat and the summary prompts. Every markdown image in answers and summaries is turned into a plain link, and the CSP stops the browser from loading images from other sites. |
+| Identity | A login cookie needs a strong `cookie_secret` (the app refuses to start with the example or a short one). Each email is bound to the Google account that first used it. Cookies get the Secure flag at Caddy. |
 | Errors and logs | Users see friendly messages with a reference; details stay in the server log. Transcripts and questions are not logged. |
 | Fail-safes | `AUTH_MODE=off` is refused unless the app listens on localhost. New videos pause when the disk is nearly full. Audio is deleted after every job. |
 

@@ -77,6 +77,20 @@ A server's public IP changes whenever it's stopped and started. An Elastic IP st
 2. Select the new address → **Actions → Associate Elastic IP address** → Instance: `ai-video-assistant` → **Associate**.
 3. Write the address down, for example `13.234.56.78`.
 
+### 5b. Keep containers away from the metadata service
+
+AWS servers answer questions about themselves at a special internal address.
+Containers don't need it, and blocking them is cheap defence against
+server-side request tricks:
+
+EC2 → **Instances** → select the server → **Actions → Instance settings →
+Modify instance metadata options**:
+- **IMDSv2:** Required
+- **Metadata response hop limit:** **1**
+
+Click **Save**. The server itself still works normally. Don't attach an IAM
+role to this server; the app needs no AWS permissions.
+
 ## 6. Get a free domain (DuckDNS)
 
 1. Go to https://www.duckdns.org and sign in, for example with your Google account.
@@ -157,6 +171,9 @@ In the server terminal, inside `AI-Video-Assistant`:
 cp .env.example .env
 cp .streamlit/secrets.toml.example .streamlit/secrets.toml
 chmod 600 .env .streamlit/secrets.toml
+# The app container runs as user 10001: it must be able to read the sign-in
+# secrets and write the data folder. Nobody else can read either.
+sudo chown 10001:10001 .streamlit/secrets.toml
 mkdir -p data && sudo chown 10001:10001 data
 python3 -c "import secrets; print(secrets.token_urlsafe(48))"   # copy this: your cookie_secret
 nano .env

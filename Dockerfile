@@ -6,7 +6,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     HF_HOME=/opt/hf-cache
 
+# upgrade pulls the latest Debian security fixes into the base image's
+# packages; rebuild regularly (see "Updating" in DEPLOY.md) to keep getting them.
 RUN apt-get update \
+ && apt-get upgrade -y \
  && apt-get install -y --no-install-recommends ffmpeg curl \
  && rm -rf /var/lib/apt/lists/*
 
@@ -27,7 +30,9 @@ RUN python -c "from sentence_transformers import SentenceTransformer, CrossEncod
 SentenceTransformer('all-MiniLM-L6-v2'); CrossEncoder('${RERANK_MODEL}')" \
  && chown -R app:app /opt/hf-cache
 
-COPY --chown=app:app . .
+# The code stays owned by root, so the app user can read but not change it;
+# only /app/data is writable.
+COPY . .
 RUN mkdir -p /app/data && chown app:app /app/data
 
 USER app
@@ -48,4 +53,5 @@ EXPOSE 8501
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD curl -fsS http://localhost:8501/_stcore/health || exit 1
 
-CMD ["streamlit", "run", "app.py"]
+# server.py runs app.py behind the upload gate (core/upload_gate.py).
+CMD ["streamlit", "run", "server.py"]

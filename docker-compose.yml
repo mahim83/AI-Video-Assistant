@@ -20,6 +20,7 @@ services:
     # RAM cap for the app (it uses ~0.8-1.2 GB). On a 2 GB server set
     # APP_MEM_LIMIT=1600m in .env and add swap (DEPLOY-AWS.md, step 7).
     mem_limit: ${APP_MEM_LIMIT:-3g}
+    pids_limit: 256
     security_opt:
       - no-new-privileges:true
     cap_drop:

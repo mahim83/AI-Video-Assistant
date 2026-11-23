@@ -45,7 +45,28 @@ def _db_role(email: str):
     return row["role"] if row else None
 
 
-def authorize(email, email_verified) -> User:
+def _check_identity(email: str, sub):
+    """
+    Bind an email to the Google account (its permanent `sub` id) that first
+    signed in with it. If the address is ever re-registered by someone else,
+    for example a reassigned work address, the newcomer doesn't inherit the
+    original owner's meetings and role.
+    """
+    if not sub:
+        return
+    with db.connect() as con:
+        row = con.execute("SELECT sub FROM identities WHERE email = ?", (email,)).fetchone()
+        if row is None:
+            con.execute("INSERT INTO identities (email, sub, first_seen) VALUES (?, ?, ?)",
+                        (email, str(sub), time.time()))
+        elif row["sub"] != str(sub):
+            raise AccessDenied(
+                f"{email} belongs to a different Google account than the one first used with "
+                "this app. Ask the app's admin to check your access."
+            )
+
+
+def authorize(email, email_verified, sub=None) -> User:
     """
     Decide whether a signed-in identity may use the app. Called on every
     rerun, so removing a user takes effect at their next click.
@@ -66,6 +87,7 @@ def authorize(email, email_verified) -> User:
         raise AccessDenied(
             f"{email} isn't on this app's invite list. Ask the app's admin to add you."
         )
+    _check_identity(email, sub)
     return User(id=user_id_for(email), email=email, role=role)
 
 
