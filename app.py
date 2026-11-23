@@ -224,7 +224,12 @@ with st.sidebar:
     mode = st.radio("Source", modes, label_visibility="collapsed")
 
     if mode == "New video":
-        kind = st.segmented_control("Input", ["YouTube URL", "Upload file"], default="YouTube URL")
+        if settings.enable_youtube:
+            kind = st.segmented_control("Input", ["YouTube URL", "Upload file"], default="YouTube URL")
+        else:
+            # Upload-only server: YouTube blocks cloud servers, so don't offer
+            # an option that would fail.
+            kind = "Upload file"
 
         url = upload = None
         if kind == "YouTube URL":
@@ -236,6 +241,8 @@ with st.sidebar:
             ready = upload is not None
         st.caption(f"Up to {settings.max_video_minutes} minutes"
                    + (f" and {settings.max_upload_mb} MB." if kind != "YouTube URL" else "."))
+        if not settings.enable_youtube:
+            st.caption("For a YouTube video, save its audio as a file first, then upload it here.")
 
         ENGINES = {
             "english":  ("English (Deepgram)",        "Cloud transcription. The fastest option."),
@@ -297,10 +304,11 @@ if mode == "Admin":
 result = st.session_state.result
 
 if result is None:
+    how = ("Paste a YouTube link or upload a recording" if settings.enable_youtube
+           else "Upload a recording")
     st.markdown(
-        '<div class="ava-empty"><h2>Open a video to get started</h2>'
-        "<p>Paste a YouTube link or upload a recording in the sidebar, "
-        "or open one of your saved meetings.</p></div>",
+        f'<div class="ava-empty"><h2>Open a video to get started</h2>'
+        f"<p>{how} in the sidebar, or open one of your saved meetings.</p></div>",
         unsafe_allow_html=True,
     )
     st.stop()

@@ -89,6 +89,16 @@ def test_invited_user_has_no_admin_and_sees_own_meetings_only(monkeypatch):
     assert "No saved meetings yet" in " ".join(i.value for i in at.sidebar.info)
 
 
+def test_upload_only_server_hides_youtube(monkeypatch):
+    monkeypatch.setenv("ENABLE_YOUTUBE", "false")
+    from core.settings import get_settings
+    get_settings.cache_clear()
+    at = run(monkeypatch, "friend@example.com")
+    assert not at.exception
+    assert not at.sidebar.text_input            # no YouTube URL box
+    assert "save its audio as a file" in " ".join(c.value for c in at.sidebar.caption)
+
+
 def test_admin_page(monkeypatch):
     at = run(monkeypatch, "owner@example.com")
     assert "Admin" in at.sidebar.radio[0].options

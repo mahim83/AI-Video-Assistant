@@ -45,6 +45,13 @@ def test_other_links_rejected(url):
         guardrails.validate_video_url(url)
 
 
+def test_youtube_can_be_turned_off(monkeypatch):
+    monkeypatch.setenv("ENABLE_YOUTUBE", "false")
+    get_settings.cache_clear()
+    with pytest.raises(GuardrailError, match="turned off"):
+        guardrails.validate_video_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+
 def test_upload_format_comes_from_extension():
     assert guardrails.validate_upload("talk.MP4", 1000) == "mp4"
     assert guardrails.validate_upload("talk.m4a", 1000) == "mp4"

@@ -225,6 +225,7 @@ All settings live in `.env`. The template is `.env.example`.
 | `ALLOWED_EMAILS` | No | | Comma-separated emails allowed as regular users without an invite. |
 | `DATA_DIR` | No | `data` | Where meetings, indexes, users and the audit log are stored. |
 | `ENABLE_WHISPER` | No | `true` | Offer the Whisper engine. The server image turns it off. |
+| `ENABLE_YOUTUBE` | No | `true` | Offer YouTube links. Set to `false` on a cloud server, which YouTube blocks; the app then only accepts uploads. |
 | Limits | No | | Video length, upload size, daily quotas and more. See the list at the end of `.env.example`. |
 
 Keep `.env` private. It is excluded from Git. Google sign-in settings go in `.streamlit/secrets.toml` (template: `.streamlit/secrets.toml.example`), also excluded.

@@ -189,6 +189,10 @@ SARVAM_API_KEY=...                   # or leave as is if you don't need Hinglish
 ADMIN_EMAILS=you@gmail.com           # your Google account
 DOMAIN=mahim-video.duckdns.org
 
+# YouTube blocks downloads from AWS ("Sign in to confirm you're not a bot"),
+# so the server is upload-only:
+ENABLE_YOUTUBE=false
+
 # Sized for a 2 GB server and a small budget:
 APP_MEM_LIMIT=1600m
 MAX_CONCURRENT_JOBS=1

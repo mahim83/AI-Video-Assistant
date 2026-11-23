@@ -63,6 +63,9 @@ class Settings:
 
     allowed_video_hosts: frozenset
     enable_whisper: bool
+    # YouTube blocks downloads from cloud servers ("Sign in to confirm you're
+    # not a bot"), so a server can switch to upload-only.
+    enable_youtube: bool
 
 
 @lru_cache(maxsize=1)
@@ -91,4 +94,5 @@ def get_settings() -> Settings:
             "youtube.com,www.youtube.com,m.youtube.com,music.youtube.com,youtu.be",
         ),
         enable_whisper=_bool("ENABLE_WHISPER", True),
+        enable_youtube=_bool("ENABLE_YOUTUBE", True),
     )

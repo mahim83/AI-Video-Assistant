@@ -196,14 +196,17 @@ def base_css():
 
 
 def sign_in_page():
+    from core.settings import get_settings
+    how = ("Paste a YouTube link or upload a recording." if get_settings().enable_youtube
+           else "Upload a recording of a meeting, lecture or video.")
     st.markdown(SIGNED_OUT_CSS, unsafe_allow_html=True)
     left, right = st.columns([5, 6], gap="large")
     with left:
         st.markdown(
             f'<div class="ava-signedout">{BRAND}'
             '<h1 class="ava-headline">Ask questions about any video or meeting recording.</h1>'
-            '<p class="ava-lede">Paste a YouTube link or upload a recording. You get the full '
-            "transcript, a short summary, and answers drawn from what was actually said.</p></div>",
+            f'<p class="ava-lede">{how} You get the full transcript, a short summary, '
+            "and answers drawn from what was actually said.</p></div>",
             unsafe_allow_html=True,
         )
         st.button("Continue with Google", key="google_signin", on_click=st.login)

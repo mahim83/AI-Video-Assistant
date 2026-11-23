@@ -50,6 +50,10 @@ def validate_video_url(url: str) -> str:
     Accept only http(s) links to YouTube hosts. Anything else, such as a server
     path, a file:// link or an internal address, never reaches yt-dlp.
     """
+    if not get_settings().enable_youtube:
+        raise GuardrailError(
+            "YouTube links are turned off on this server. Download the audio and upload the file instead."
+        )
     url = (url or "").strip()
     if not url:
         raise GuardrailError("Paste a YouTube link.")
