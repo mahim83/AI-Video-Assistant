@@ -66,6 +66,41 @@ def test_admin_guard_rails(owner):
         users.remove_user(owner, "nobody@example.com")
 
 
+def test_access_requests(owner, friend):
+    users.request_access("New@Example.com", sub="g-1")
+    users.request_access("new@example.com")          # a second click changes nothing
+    assert users.request_status("new@example.com") == "pending"
+    assert [r["email"] for r in users.list_requests(owner)] == ["new@example.com"]
+    assert users.pending_request_count() == 1
+
+    with pytest.raises(PermissionError):
+        users.approve_request(friend, "new@example.com")
+    users.approve_request(owner, "new@example.com")
+    assert users.authorize("new@example.com", True).role == "user"
+    assert users.request_status("new@example.com") is None
+
+
+def test_rejection_sticks(owner):
+    users.request_access("pest@example.com")
+    users.reject_request(owner, "pest@example.com")
+    users.request_access("pest@example.com")          # asking again doesn't reopen it
+    assert users.request_status("pest@example.com") == "rejected"
+    assert users.list_requests(owner) == []
+    with pytest.raises(ValueError):
+        users.approve_request(owner, "pest@example.com")
+    # An admin can still let them in directly.
+    users.add_user(owner, "pest@example.com")
+    assert users.request_status("pest@example.com") is None
+
+
+def test_pending_requests_are_capped(monkeypatch):
+    monkeypatch.setattr(users, "MAX_PENDING_REQUESTS", 2)
+    users.request_access("a@example.com")
+    users.request_access("b@example.com")
+    with pytest.raises(ValueError, match="new requests"):
+        users.request_access("c@example.com")
+
+
 def test_list_users_shows_sources(owner):
     users.add_user(owner, "added@example.com")
     sources = {r["email"]: r["source"] for r in users.list_users(owner)}

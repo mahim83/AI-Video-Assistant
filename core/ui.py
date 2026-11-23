@@ -105,132 +105,122 @@ SIGNED_OUT_CSS = """
 .ava-note { font-size: .875rem; line-height: 1.5; color: var(--ava-muted);
             margin: 1.25rem 0 0 0; max-width: 30rem; }
 
-.st-key-google_signin button, .st-key-switch_account button {
-  width: auto; min-width: 16rem; min-height: 3rem; padding: 0 1.25rem 0 .75rem;
+/* Primary actions on the signed-out pages. */
+:is(.st-key-google_signin, .st-key-switch_account, .st-key-request_access, .st-key-request_check) button {
+  width: auto; min-width: 16rem; min-height: 3rem; padding: 0 1.25rem;
   background: var(--ava-accent); border-color: var(--ava-accent); color: #fff;
 }
-.st-key-switch_account button { padding: 0 1.25rem; }
-.st-key-google_signin button:hover, .st-key-switch_account button:hover {
+.st-key-google_signin button { padding-left: .75rem; }
+:is(.st-key-google_signin, .st-key-switch_account, .st-key-request_access, .st-key-request_check) button:hover {
   background: var(--ava-accent-strong); border-color: var(--ava-accent-strong); color: #fff;
 }
-.st-key-google_signin button:focus-visible, .st-key-switch_account button:focus-visible {
+:is(.st-key-google_signin, .st-key-switch_account, .st-key-request_access, .st-key-request_check) button:focus-visible {
   outline: 2px solid var(--ava-accent); outline-offset: 3px;
 }
-.st-key-google_signin button p, .st-key-switch_account button p { font-size: 1rem; font-weight: 600; }
+:is(.st-key-google_signin, .st-key-switch_account, .st-key-request_access, .st-key-request_check) button p {
+  font-size: 1rem; font-weight: 600;
+}
 .st-key-google_signin button::before {
   content: ""; flex: none; width: 1.75rem; height: 1.75rem; margin-right: .75rem;
   border-radius: 50%; background: #fff url("__GOOGLE_G__") center / 1.05rem no-repeat;
 }
 
-/* The excerpt: transcript, the summary point drawn from it, and a question about it. */
-/* Pushed down so the panel's top lines up with the headline, not the brand. */
-.ava-excerpt-col { padding-top: 8.7rem; }
-.st-key-denied { max-width: 40rem; }
-.ava-excerpt { background: var(--ava-raised); border: 1px solid #E3E8ED; border-radius: .75rem;
-               padding: .5rem 1.75rem 1.25rem; margin: 0; }
-.ava-row { display: grid; grid-template-columns: 5.25rem 1fr; gap: 1.25rem; padding: 1.15rem 0;
-           border-top: 1px solid var(--ava-rule); }
-.ava-row:first-child { border-top: 0; }
-.ava-label { font-size: .8125rem; font-weight: 500; color: var(--ava-faint); padding-top: .2rem; }
-.ava-text p { font-family: var(--ava-read); font-size: 1.0625rem; line-height: 1.6;
-              color: var(--ava-ink); margin: 0 0 .5rem 0; }
-.ava-text p:last-child { margin-bottom: 0; }
-.ava-text .ava-q { font-family: inherit; font-size: 1rem; font-weight: 600; line-height: 1.45; }
-.ava-excerpt figcaption { font-size: .8125rem; color: var(--ava-faint); padding-top: .9rem;
-                          border-top: 1px solid var(--ava-rule); }
+/* One column: these pages say one thing each. */
+.st-key-signedout { max-width: 40rem; }
 
-/* One orchestrated moment: the excerpt plays in like captions, once. */
-@keyframes ava-caption { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-.ava-cue { animation: ava-caption 200ms ease-out both; }
-.ava-cue:nth-of-type(2) { animation-delay: 180ms; }
-.ava-cue:nth-of-type(3) { animation-delay: 360ms; }
-.ava-row:nth-child(2) .ava-cue { animation-delay: 620ms; }
-.ava-row:nth-child(3) .ava-cue:nth-of-type(1) { animation-delay: 860ms; }
-.ava-row:nth-child(3) .ava-cue:nth-of-type(2) { animation-delay: 1040ms; }
-@media (prefers-reduced-motion: reduce) { .ava-cue { animation: none; } }
+/* The one orchestrated moment: the headline arrives word by word, the way
+   live captions do, then the explanation and the action follow. Once, on load,
+   about a second in all; switched off for anyone who prefers reduced motion. */
+@keyframes ava-rise { from { opacity: 0; transform: translateY(.28em); } to { opacity: 1; transform: none; } }
+.ava-caption .ava-w { display: inline-block; animation: ava-rise 220ms ease-out both; }
+.ava-caption .ava-w:nth-child(2)  { animation-delay: 70ms; }
+.ava-caption .ava-w:nth-child(3)  { animation-delay: 140ms; }
+.ava-caption .ava-w:nth-child(4)  { animation-delay: 210ms; }
+.ava-caption .ava-w:nth-child(5)  { animation-delay: 280ms; }
+.ava-caption .ava-w:nth-child(6)  { animation-delay: 350ms; }
+.ava-caption .ava-w:nth-child(7)  { animation-delay: 420ms; }
+.ava-caption .ava-w:nth-child(8)  { animation-delay: 490ms; }
+.ava-caption .ava-w:nth-child(9)  { animation-delay: 560ms; }
+.ava-caption .ava-w:nth-child(10) { animation-delay: 630ms; }
+.ava-follow { animation: ava-rise 240ms ease-out 700ms both; }
+.st-key-google_signin { animation: ava-rise 240ms ease-out 820ms both; }
+.ava-note.ava-follow { animation-delay: 940ms; }
+@media (prefers-reduced-motion: reduce) {
+  .ava-caption .ava-w, .ava-follow, .st-key-google_signin { animation: none; }
+}
 
 @media (max-width: 640px) {
   .ava-signedout { padding-top: .5rem; }
   .ava-signedout .ava-brand { margin-bottom: 2rem; }
-  .ava-excerpt-col { padding-top: .5rem; }
-  .ava-excerpt { padding: .25rem 1.1rem 1rem; }
-  .ava-row { grid-template-columns: 1fr; gap: .35rem; }
 }
 </style>
 """.replace("__GOOGLE_G__", _GOOGLE_G)
 
-# A real passage from a processed 50-minute video, with the summary point and
-# answer written from what the speaker says there.
-EXCERPT = """
-<div class="ava-excerpt-col">
-<figure class="ava-excerpt">
-  <div class="ava-row">
-    <div class="ava-label">Transcript</div>
-    <div class="ava-text">
-      <p class="ava-cue">Every LLM is trained on a particular date, so it has information up to a particular date.</p>
-      <p class="ava-cue">If I'm using GPT and it has information till October 2023, then it doesn't have access to the latest information.</p>
-      <p class="ava-cue">They are good at answering questions, but they don't really perform any task.</p>
-    </div>
-  </div>
-  <div class="ava-row">
-    <div class="ava-label">Summary</div>
-    <div class="ava-text">
-      <p class="ava-cue">LLM apps hit two limits: knowledge that stops at the training date, and models that write text instead of carrying out tasks.</p>
-    </div>
-  </div>
-  <div class="ava-row">
-    <div class="ava-label">Ask</div>
-    <div class="ava-text">
-      <p class="ava-cue ava-q">What problems does the speaker see with LLM apps?</p>
-      <p class="ava-cue">Two: the model only knows what existed up to its training date, and it can only produce text, so it can't act on its own.</p>
-    </div>
-  </div>
-  <figcaption>From a 50-minute talk on MCP architecture, processed with this app.</figcaption>
-</figure>
-</div>
-"""
+
+def _caption_words(text: str) -> str:
+    """Wrap each word so the headline can arrive word by word."""
+    return " ".join(f'<span class="ava-w">{html.escape(w)}</span>' for w in text.split())
 
 
 def base_css():
     st.markdown(BASE_CSS, unsafe_allow_html=True)
 
 
+def _header(headline: str, lede_html: str, caption: bool = False, wide: bool = False):
+    words = _caption_words(headline) if caption else html.escape(headline)
+    classes = "ava-headline" + (" ava-caption" if caption else "") + (" ava-wide" if wide else "")
+    st.markdown(
+        f'<div class="ava-signedout">{BRAND}<h1 class="{classes}">{words}</h1>'
+        f'<p class="ava-lede{" ava-follow" if caption else ""}">{lede_html}</p></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _note(text: str, follow: bool = False):
+    st.markdown(f'<p class="ava-note{" ava-follow" if follow else ""}">{text}</p>', unsafe_allow_html=True)
+
+
 def sign_in_page():
     from core.settings import get_settings
-    how = ("Paste a YouTube link or upload a recording." if get_settings().enable_youtube
+    settings = get_settings()
+    how = ("Paste a YouTube link or upload a recording." if settings.enable_youtube
            else "Upload a recording of a meeting, lecture or video.")
     st.markdown(SIGNED_OUT_CSS, unsafe_allow_html=True)
-    left, right = st.columns([5, 6], gap="large")
-    with left:
-        st.markdown(
-            f'<div class="ava-signedout">{BRAND}'
-            '<h1 class="ava-headline">Ask questions about any video or meeting recording.</h1>'
-            f'<p class="ava-lede">{how} You get the full transcript, a short summary, '
-            "and answers drawn from what was actually said.</p></div>",
-            unsafe_allow_html=True,
-        )
+    with st.container(key="signedout"):
+        _header("Ask questions about any video or meeting recording.",
+                f"{how} You get the full transcript, a short summary, "
+                "and answers drawn from what was actually said.", caption=True)
         st.button("Continue with Google", key="google_signin", on_click=st.login)
-        st.markdown(
-            '<p class="ava-note">This app is invite only. Ask the person who runs it to add your '
-            "Google account. Other users can't see your meetings.</p>",
-            unsafe_allow_html=True,
-        )
-    with right:
-        st.markdown(EXCERPT, unsafe_allow_html=True)
+        if settings.signup_mode == "request":
+            _note("New here? Continue with Google and request access. The admin approves "
+                  "new accounts. Other users can't see your meetings.", follow=True)
+        else:
+            _note("This app is invite only. Ask the person who runs it to add your "
+                  "Google account. Other users can't see your meetings.", follow=True)
+
+
+def request_page(email: str, status, on_request, on_request_args=(), error: str = None):
+    """For a verified Google account that isn't on the list yet."""
+    who = html.escape(email, quote=False)
+    st.markdown(SIGNED_OUT_CSS, unsafe_allow_html=True)
+    with st.container(key="signedout"):
+        if status == "pending":
+            _header("Request sent.", f"Your request for {who} is waiting for the admin's approval. "
+                    "You can use the app as soon as it's approved.", wide=True)
+            st.button("Check again", key="request_check")
+        else:
+            _header("Request access.", f"You're signed in as {who}. This app is invite only: "
+                    "send a request and the admin will review it.", wide=True)
+            st.button("Request access", key="request_access", on_click=on_request, args=on_request_args)
+        if error:
+            st.error(error)
+        st.button("Use a different account", key="switch_account_plain", on_click=st.logout)
 
 
 def denied_page(message: str):
     st.markdown(SIGNED_OUT_CSS, unsafe_allow_html=True)
-    with st.container(key="denied"):
-        st.markdown(
-            f'<div class="ava-signedout">{BRAND}'
-            '<h1 class="ava-headline ava-wide">This account doesn\'t have access.</h1></div>',
-            unsafe_allow_html=True,
-        )
+    with st.container(key="signedout"):
         # Escaped: the message contains the email the visitor signed in with.
-        st.markdown(f"<p class='ava-lede'>{html.escape(message, quote=False)}</p>", unsafe_allow_html=True)
+        _header("This account doesn't have access.", html.escape(message, quote=False), wide=True)
         st.button("Use a different account", key="switch_account", on_click=st.logout)
-        st.markdown(
-            '<p class="ava-note">You\'ll be signed out and can choose another Google account.</p>',
-            unsafe_allow_html=True,
-        )
+        _note("You'll be signed out and can choose another Google account.")

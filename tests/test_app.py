@@ -50,10 +50,53 @@ def test_email_bound_to_first_google_account(monkeypatch):
     assert not at.sidebar.radio
 
 
+def invite_only(monkeypatch):
+    monkeypatch.setenv("SIGNUP_MODE", "invite")
+    from core.settings import get_settings
+    get_settings.cache_clear()
+
+
 def test_denied_logins_are_logged_once_per_hour(monkeypatch):
+    invite_only(monkeypatch)
     run(monkeypatch, "stranger@example.com")
     run(monkeypatch, "stranger@example.com")   # a new session, same hour
     assert [r["action"] for r in db.recent_audit()].count("login_denied") == 1
+
+
+def test_request_access_flow(monkeypatch):
+    # A new Google account asks for access...
+    at = run(monkeypatch, "newcomer@example.com")
+    assert not at.sidebar.radio
+    assert "Request access." in texts(at)
+    at.button(key="request_access").click().run()
+    assert "Request sent." in texts(at)
+    assert not at.sidebar.radio
+
+    # ...the admin sees it waiting and approves it...
+    admin = run(monkeypatch, "owner@example.com")
+    assert "1 access request waiting" in " ".join(c.value for c in admin.sidebar.caption)
+    admin.sidebar.radio[0].set_value("Admin").run()
+    admin.button(key=f"approve_{users.user_id_for('newcomer@example.com')}").click().run()
+    assert not admin.exception
+
+    # ...and the newcomer is in, as a regular user.
+    at = run(monkeypatch, "newcomer@example.com")
+    assert at.sidebar.radio[0].options == ["New video", "Saved meetings"]
+
+
+def test_rejected_request_sees_no_access(monkeypatch):
+    run(monkeypatch, "newcomer@example.com").button(key="request_access").click().run()
+    owner = users.authorize("owner@example.com", True)
+    users.reject_request(owner, "newcomer@example.com")
+    at = run(monkeypatch, "newcomer@example.com")
+    assert "declined" in texts(at)
+    assert "request_access" not in [b.key for b in at.button]
+
+
+def test_unverified_email_cannot_request(monkeypatch):
+    at = run(monkeypatch, "newcomer@example.com", verified=False)
+    assert "isn't verified" in texts(at)
+    assert "Request access." not in texts(at)
 
 
 def test_signed_out_sees_only_sign_in(monkeypatch):
@@ -64,6 +107,7 @@ def test_signed_out_sees_only_sign_in(monkeypatch):
 
 
 def test_uninvited_account_is_denied_and_audited(monkeypatch):
+    invite_only(monkeypatch)
     at = run(monkeypatch, "stranger@example.com")
     assert not at.exception
     assert "isn't on this app's invite list" in texts(at)

@@ -41,6 +41,14 @@ CREATE TABLE IF NOT EXISTS identities (
     sub        TEXT NOT NULL,
     first_seen REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS access_requests (
+    email        TEXT PRIMARY KEY,
+    sub          TEXT,
+    status       TEXT NOT NULL CHECK (status IN ('pending', 'rejected')),
+    requested_at REAL NOT NULL,
+    decided_by   TEXT,
+    decided_at   REAL
+);
 """
 
 _init_lock = threading.Lock()

@@ -223,6 +223,7 @@ All settings live in `.env`. The template is `.env.example`.
 | `AUTH_MODE` | No | `oidc` | `oidc` for Google sign-in, `off` for local use only. |
 | `ADMIN_EMAILS` | With sign-in | | Comma-separated admin emails. Admins invite users in the app. |
 | `ALLOWED_EMAILS` | No | | Comma-separated emails allowed as regular users without an invite. |
+| `SIGNUP_MODE` | No | `request` | `request`: a new Google account can ask for access, and an admin approves it on the Admin page. `invite`: only emails an admin added can sign in. |
 | `DATA_DIR` | No | `data` | Where meetings, indexes, users and the audit log are stored. |
 | `ENABLE_WHISPER` | No | `true` | Offer the Whisper engine. The server image turns it off. |
 | `ENABLE_YOUTUBE` | No | `true` | Offer YouTube links. Set to `false` on a cloud server, which YouTube blocks; the app then only accepts uploads. |

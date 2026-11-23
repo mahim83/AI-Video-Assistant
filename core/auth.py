@@ -8,10 +8,10 @@ import time
 
 import streamlit as st
 
-from core import db, ui
+from core import db, ui, users
 from core.errors import AccessDenied
 from core.settings import get_settings
-from core.users import LOCAL_USER, User, authorize
+from core.users import LOCAL_USER, NotInvited, User, authorize
 
 LOOPBACK = ("localhost", "127.0.0.1", "::1")
 # The placeholder in .streamlit/secrets.toml.example.
@@ -43,6 +43,25 @@ def cookie_secret_problem(secret: str):
             "python3 -c \"import secrets; print(secrets.token_urlsafe(48))\" and restart the app."
         )
     return None
+
+
+def _deny(email, message: str):
+    label = str(email or "?")
+    # At most one row per email per hour, so scripted sign-ins can't push
+    # real events out of the admin's view.
+    if st.session_state.get("_denied_email") != email:
+        st.session_state["_denied_email"] = email
+        if not db.audited_since("login_denied", label, time.time() - 3600):
+            db.audit("login_denied", email=label)
+    ui.denied_page(message)
+    st.stop()
+
+
+def _submit_request(email: str, sub):
+    try:
+        users.request_access(email, sub)
+    except ValueError as e:
+        st.session_state["_request_error"] = str(e)
 
 
 def require_user() -> User:
@@ -79,18 +98,20 @@ def require_user() -> User:
         st.stop()
 
     email = st.user.get("email")
+    sub = st.user.get("sub")
     try:
-        user = authorize(email, st.user.get("email_verified"), st.user.get("sub"))
-    except AccessDenied as e:
-        label = str(email or "?")
-        # At most one row per email per hour, so scripted sign-ins can't push
-        # real events out of the admin's view.
-        if st.session_state.get("_denied_email") != email:
-            st.session_state["_denied_email"] = email
-            if not db.audited_since("login_denied", label, time.time() - 3600):
-                db.audit("login_denied", email=label)
-        ui.denied_page(str(e))
+        user = authorize(email, st.user.get("email_verified"), sub)
+    except NotInvited as e:
+        if settings.signup_mode != "request":
+            _deny(email, str(e))
+        status = users.request_status(e.email)
+        if status == "rejected":
+            _deny(email, "Your request to use this app was declined.")
+        ui.request_page(e.email, status, on_request=_submit_request, on_request_args=(e.email, sub),
+                        error=st.session_state.pop("_request_error", None))
         st.stop()
+    except AccessDenied as e:
+        _deny(email, str(e))
 
     if st.session_state.get("_signed_in_as") != user.id:
         st.session_state["_signed_in_as"] = user.id

@@ -1,6 +1,8 @@
 """
-Who may use the app, and with which role. Invite-only: an identity is let in
-only if its email is in ADMIN_EMAILS, ALLOWED_EMAILS, or was added by an admin.
+Who may use the app, and with which role. An identity is let in only if its
+email is in ADMIN_EMAILS, ALLOWED_EMAILS, or was added by an admin. With
+SIGNUP_MODE=request, anyone with a verified Google account can ask for
+access, and an admin approves or rejects the request.
 """
 import hashlib
 import re
@@ -13,6 +15,17 @@ from core.settings import get_settings
 
 ROLES = ("user", "admin")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# Above this many pending requests, new ones are refused, so scripted
+# sign-ins can't bury real requests or grow the table without limit.
+MAX_PENDING_REQUESTS = 100
+
+
+class NotInvited(AccessDenied):
+    """A verified identity that isn't on the list yet: the one case that may request access."""
+
+    def __init__(self, email: str):
+        super().__init__(f"{email} isn't on this app's invite list. Ask the app's admin to add you.")
+        self.email = email
 
 
 @dataclass(frozen=True)
@@ -84,9 +97,7 @@ def authorize(email, email_verified, sub=None) -> User:
     else:
         role = _db_role(email) or ("user" if email in settings.allowed_emails else None)
     if role is None:
-        raise AccessDenied(
-            f"{email} isn't on this app's invite list. Ask the app's admin to add you."
-        )
+        raise NotInvited(email)
     _check_identity(email, sub)
     return User(id=user_id_for(email), email=email, role=role)
 
@@ -126,6 +137,8 @@ def add_user(actor: User, email: str, role: str = "user"):
             "ON CONFLICT(email) DO UPDATE SET role = excluded.role",
             (email, role, actor.email, time.time()),
         )
+        # Adding someone settles any request they had open.
+        con.execute("DELETE FROM access_requests WHERE email = ?", (email,))
     db.audit("user_added", actor, detail=f"{email} as {role}")
 
 
@@ -145,3 +158,70 @@ def remove_user(actor: User, email: str):
     if not removed:
         raise ValueError(f"{email} isn't in the user list.")
     db.audit("user_removed", actor, detail=email)
+
+
+# Access requests (SIGNUP_MODE=request)
+
+def request_status(email: str):
+    """'pending', 'rejected', or None if this email never asked."""
+    with db.connect() as con:
+        row = con.execute("SELECT status FROM access_requests WHERE email = ?",
+                          (normalize_email(email),)).fetchone()
+    return row["status"] if row else None
+
+
+def request_access(email: str, sub=None):
+    """
+    Record a request from a signed-in, verified identity. Only reachable
+    after authorize() raised NotInvited, which happens after the
+    email_verified check, so unverified addresses can't get here.
+    """
+    email = normalize_email(email)
+    with db.connect() as con:
+        if con.execute("SELECT 1 FROM access_requests WHERE email = ?", (email,)).fetchone():
+            return   # one request per email; a rejection stays rejected
+        pending = con.execute("SELECT COUNT(*) FROM access_requests WHERE status = 'pending'").fetchone()[0]
+        if pending >= MAX_PENDING_REQUESTS:
+            raise ValueError("The app isn't taking new requests right now. Try again later.")
+        con.execute(
+            "INSERT INTO access_requests (email, sub, status, requested_at) VALUES (?, ?, 'pending', ?)",
+            (email, str(sub) if sub else None, time.time()),
+        )
+    db.audit("access_requested", email=email)
+
+
+def list_requests(actor: User) -> list:
+    _require_admin(actor)
+    with db.connect() as con:
+        rows = con.execute(
+            "SELECT email, requested_at FROM access_requests WHERE status = 'pending' ORDER BY requested_at"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def pending_request_count() -> int:
+    with db.connect() as con:
+        return con.execute("SELECT COUNT(*) FROM access_requests WHERE status = 'pending'").fetchone()[0]
+
+
+def approve_request(actor: User, email: str):
+    _require_admin(actor)
+    email = normalize_email(email)
+    if request_status(email) != "pending":
+        raise ValueError(f"{email} has no pending request.")
+    add_user(actor, email, "user")   # also clears the request
+    db.audit("request_approved", actor, detail=email)
+
+
+def reject_request(actor: User, email: str):
+    _require_admin(actor)
+    email = normalize_email(email)
+    with db.connect() as con:
+        changed = con.execute(
+            "UPDATE access_requests SET status = 'rejected', decided_by = ?, decided_at = ? "
+            "WHERE email = ? AND status = 'pending'",
+            (actor.email, time.time(), email),
+        ).rowcount
+    if not changed:
+        raise ValueError(f"{email} has no pending request.")
+    db.audit("request_rejected", actor, detail=email)

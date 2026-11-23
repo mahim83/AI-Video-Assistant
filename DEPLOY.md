@@ -105,6 +105,7 @@ Google**, and after signing in with your admin account, the app.
 
 In the sidebar, choose **Admin**:
 
+- **Access requests**: anyone who signs in with a verified Google account and isn't on the list can click **Request access** (with the default `SIGNUP_MODE=request`). Your sidebar shows how many are waiting; **Approve** lets them in at their next click, **Reject** keeps them out. Set `SIGNUP_MODE=invite` to turn requests off.
 - **Invite a user**: enter their Google account email and choose a role. They can sign in right away.
 - **Revoke access**: takes effect at their next click. Their meetings stay on disk.
 - **Users and today's usage** and the **Audit log** show who did what. The log records actions (sign-in, processed, opened, deleted), never questions or transcripts.

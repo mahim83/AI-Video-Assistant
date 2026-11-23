@@ -47,6 +47,9 @@ class Settings:
     admin_emails: frozenset
     # Allowed as regular users. Admins can also add users in the app.
     allowed_emails: frozenset
+    # "request": anyone with a verified Google account can ask for access and
+    # an admin approves. "invite": only emails an admin added get in.
+    signup_mode: str
 
     max_video_minutes: int
     max_upload_mb: int
@@ -74,11 +77,16 @@ def get_settings() -> Settings:
     if auth_mode not in ("oidc", "off"):
         raise RuntimeError(f"AUTH_MODE must be 'oidc' or 'off', got {auth_mode!r}")
 
+    signup_mode = os.getenv("SIGNUP_MODE", "request").strip().lower()
+    if signup_mode not in ("request", "invite"):
+        raise RuntimeError(f"SIGNUP_MODE must be 'request' or 'invite', got {signup_mode!r}")
+
     return Settings(
         data_dir=os.getenv("DATA_DIR", "data").strip() or "data",
         auth_mode=auth_mode,
         admin_emails=_set("ADMIN_EMAILS"),
         allowed_emails=_set("ALLOWED_EMAILS"),
+        signup_mode=signup_mode,
         max_video_minutes=_int("MAX_VIDEO_MINUTES", 90),
         max_upload_mb=_int("MAX_UPLOAD_MB", 100),
         videos_per_day=_int("VIDEOS_PER_DAY", 5),
