@@ -132,6 +132,21 @@ def test_signed_out_sees_only_sign_in(monkeypatch):
     assert not at.sidebar.radio
 
 
+def test_top_bar_links_to_sign_in_and_sign_up(monkeypatch):
+    at = run(monkeypatch)
+    bar = next(m.value for m in at.markdown if 'class="ava-topbar"' in m.value)
+    assert 'href="?"' in bar and ">Sign in</a>" in bar
+    assert 'href="?page=register"' in bar and ">Sign up</a>" in bar
+
+    # With sign-ups off, the bar offers Sign in only.
+    monkeypatch.setenv("SIGNUP_MODE", "invite")
+    from core.settings import get_settings
+    get_settings.cache_clear()
+    at = run(monkeypatch)
+    bar = next(m.value for m in at.markdown if 'class="ava-topbar"' in m.value)
+    assert ">Sign in</a>" in bar and "Sign up" not in bar
+
+
 def test_sign_in_page_offers_both_with_email_set_up(monkeypatch):
     enable_email(monkeypatch)
     at = run(monkeypatch)

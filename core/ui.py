@@ -137,6 +137,26 @@ SIGNED_OUT_CSS = """
 .ava-authtabs a.ava-on { color: var(--ava-accent); border-bottom-color: var(--ava-accent); }
 .ava-authtabs a:focus-visible { outline: 2px solid var(--ava-accent); outline-offset: 3px; border-radius: 2px; }
 
+/* Top bar: brand on the left, Sign in and Sign up on the right.
+   Starts below Streamlit's own toolbar so its menu never covers the buttons. */
+.ava-topbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+              margin: 1.5rem 0 3rem 0; padding-bottom: 1.25rem; border-bottom: 1px solid var(--ava-rule); }
+.ava-topnav { display: flex; align-items: center; gap: .5rem; }
+[data-testid="stMarkdownContainer"] .ava-topnav a {
+  display: inline-flex; align-items: center; min-height: 2.5rem; padding: 0 1rem;
+  border-radius: .375rem; border: 1px solid transparent; font-size: .9375rem; font-weight: 600;
+  text-decoration: none; transition: background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out;
+}
+[data-testid="stMarkdownContainer"] .ava-topnav a.ava-top-in { color: var(--ava-ink); border-color: var(--ava-rule);
+                                                              background: var(--ava-raised); }
+[data-testid="stMarkdownContainer"] .ava-topnav a.ava-top-in:hover { color: var(--ava-accent); border-color: var(--ava-accent); }
+[data-testid="stMarkdownContainer"] .ava-topnav a.ava-top-up { color: #fff; background: var(--ava-accent);
+                                                              border-color: var(--ava-accent); }
+[data-testid="stMarkdownContainer"] .ava-topnav a.ava-top-up:hover { background: var(--ava-accent-strong);
+                                                                    border-color: var(--ava-accent-strong); }
+[data-testid="stMarkdownContainer"] .ava-topnav a:focus-visible { outline: 2px solid var(--ava-accent); outline-offset: 2px; }
+.ava-signedout.ava-under-bar { padding-top: 0; }
+
 /* "or sign in with email": a quiet rule with the words in the middle. */
 .ava-or { display: flex; align-items: center; gap: .75rem; margin: 1.5rem 0 .25rem 0; max-width: 26rem;
           color: var(--ava-faint); font-size: .8125rem; }
@@ -180,8 +200,8 @@ SIGNED_OUT_CSS = """
 
 /* The player: what the app does, shown rather than described. A subtitle is
    captioned word by word while the playhead moves along the waveform. */
-/* Pushed down so the player's top lines up with the headline, not the brand. */
-.ava-player { margin: 7.6rem 0 0 0; }
+/* The brand sits in the top bar, so the player's top lines up with the headline. */
+.ava-player { margin: .45rem 0 0 0; }
 .ava-screen { position: relative; aspect-ratio: 16 / 9; background: var(--ava-ink);
               border-radius: .75rem .75rem 0 0; overflow: hidden; }
 .ava-screen .ava-play { position: absolute; left: 50%; top: 42%; width: 3.25rem; height: 3.25rem;
@@ -245,6 +265,8 @@ SIGNED_OUT_CSS = """
   .ava-signedout { padding-top: .5rem; }
   .ava-signedout .ava-brand { margin-bottom: 2rem; }
   .ava-player { margin-top: 1rem; }
+  .ava-topbar { margin: 1rem 0 2rem 0; }
+  [data-testid="stMarkdownContainer"] .ava-topnav a { padding: 0 .8rem; }
   .ava-subtitle { font-size: .9375rem; bottom: .7rem; }
   .ava-grid, .ava-grid.ava-two { grid-template-columns: 1fr; gap: 1.75rem; }
   .ava-section { margin-top: 3rem; }
@@ -300,11 +322,12 @@ def base_css():
 
 
 def _header(headline: str, lede_html: str, caption: bool = False, wide: bool = False,
-            follow: bool = False):
+            follow: bool = False, brand: bool = True):
     words = _caption_words(headline) if caption else html.escape(headline)
     classes = "ava-headline" + (" ava-caption" if caption else "") + (" ava-wide" if wide else "")
+    top = BRAND if brand else ""
     st.markdown(
-        f'<div class="ava-signedout">{BRAND}<h1 class="{classes}">{words}</h1>'
+        f'<div class="ava-signedout{"" if brand else " ava-under-bar"}">{top}<h1 class="{classes}">{words}</h1>'
         f'<p class="ava-lede{" ava-follow" if (caption or follow) else ""}">{lede_html}</p></div>',
         unsafe_allow_html=True,
     )
@@ -455,6 +478,18 @@ def _email_sign_in_form():
     _note(_link(RESET_HREF, "Forgot your password?"))
 
 
+def _top_bar(active: str, signup: bool):
+    """The brand on the left, Sign in and Sign up on the right, on every signed-out page."""
+    def item(key, label, href, cls):
+        current = ' aria-current="page"' if key == active else ""
+        return f'<a class="{cls}" href="{href}" target="_self"{current}>{label}</a>'
+    links = item("signin", "Sign in", HOME_HREF, "ava-top-in")
+    if signup:
+        links += item("signup", "Sign up", REGISTER_HREF, "ava-top-up")
+    st.markdown(f'<header class="ava-topbar">{BRAND}<nav class="ava-topnav" aria-label="Account">'
+                f"{links}</nav></header>", unsafe_allow_html=True)
+
+
 def _auth_tabs(active: str):
     """Sign in | Sign up. Links, not st.tabs, so each has its own address and
     the "Don't have an account? Sign up" line can switch to the other."""
@@ -563,13 +598,15 @@ def sign_in_page(active: str = "signin"):
     how = ("Paste a YouTube link or upload a recording." if settings.enable_youtube
            else "Upload a recording of a meeting, lecture or video.")
     st.markdown(SIGNED_OUT_CSS, unsafe_allow_html=True)
+    _top_bar(active, settings.signup_mode == "request")
     left, right = st.columns([11, 10], gap="large")
     with right:
         st.markdown(_player(), unsafe_allow_html=True)
     with left:
         _header("Ask questions about any video or meeting recording.",
                 f"{how} You get the full transcript, a short summary, "
-                "and answers drawn from what was actually said.", caption=False, follow=True)
+                "and answers drawn from what was actually said.", caption=False, follow=True,
+                brand=False)
         with st.container(key="signin_box"):
             _auth_tabs(active)
             if active == "signup":
@@ -589,12 +626,14 @@ def register_page():
 def reset_page():
     """Forgot password: a code by email, then a new password."""
     from core import local_auth
+    from core.settings import get_settings
     st.markdown(SIGNED_OUT_CSS, unsafe_allow_html=True)
+    _top_bar("reset", get_settings().signup_mode == "request")
     with st.container(key="signedout"):
         if email := st.session_state.get("_reset_email"):
             who = html.escape(email, quote=False)
             _header("Choose a new password.", f"If {who} has an account, we sent it a 6-digit code. "
-                    "Enter it with your new password.", wide=True)
+                    "Enter it with your new password.", wide=True, brand=False)
             with st.form("reset_form", border=False):
                 code = st.text_input("6-digit code", key="reset_code", max_chars=6)
                 password = st.text_input("New password", type="password", key="reset_password",
@@ -619,7 +658,7 @@ def reset_page():
             return
 
         _header("Reset your password.", "Enter the email you registered with. We'll send you a code "
-                "to choose a new password.", wide=True)
+                "to choose a new password.", wide=True, brand=False)
         with st.form("reset_start_form", border=False):
             email = st.text_input("Email", key="reset_email_input", max_chars=254, autocomplete="email")
             sent = st.form_submit_button("Send reset code", key="reset_start_submit", type="primary")
