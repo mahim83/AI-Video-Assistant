@@ -106,21 +106,32 @@ SIGNED_OUT_CSS = """
             margin: 1.25rem 0 0 0; max-width: 30rem; }
 
 /* Primary actions on the signed-out pages. */
-:is(.st-key-google_signin, .st-key-switch_account, .st-key-request_access, .st-key-request_check) button {
+:is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-request_access, .st-key-request_check) button {
   width: auto; min-width: 16rem; min-height: 3rem; padding: 0 1.25rem;
   background: var(--ava-accent); border-color: var(--ava-accent); color: #fff;
 }
-.st-key-google_signin button { padding-left: .75rem; }
-:is(.st-key-google_signin, .st-key-switch_account, .st-key-request_access, .st-key-request_check) button:hover {
+:is(.st-key-google_signin, .st-key-google_register) button { padding-left: .75rem; }
+:is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-request_access, .st-key-request_check) button:hover {
   background: var(--ava-accent-strong); border-color: var(--ava-accent-strong); color: #fff;
 }
-:is(.st-key-google_signin, .st-key-switch_account, .st-key-request_access, .st-key-request_check) button:focus-visible {
+:is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-request_access, .st-key-request_check) button:focus-visible {
   outline: 2px solid var(--ava-accent); outline-offset: 3px;
 }
-:is(.st-key-google_signin, .st-key-switch_account, .st-key-request_access, .st-key-request_check) button p {
+:is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-request_access, .st-key-request_check) button p {
   font-size: 1rem; font-weight: 600;
 }
-.st-key-google_signin button::before {
+
+/* Sign in / Register tabs. */
+.st-key-signin_tabs [role="tablist"] { gap: 1.75rem; margin-bottom: .5rem; }
+.st-key-signin_tabs [data-testid="stTab"] p { font-size: 1rem; font-weight: 600; }
+.ava-steps { margin: .25rem 0 1.5rem 0; padding-left: 1.25rem; color: var(--ava-muted);
+             font-size: 1rem; line-height: 1.6; max-width: 34rem; }
+.ava-steps li { margin: 0 0 .35rem 0; padding-left: .25rem; }
+.ava-steps li::marker { color: var(--ava-accent); font-weight: 600; }
+.ava-tab-lede { color: var(--ava-muted); font-size: 1rem; line-height: 1.55; margin: .25rem 0 1.25rem 0;
+                max-width: 34rem; }
+
+:is(.st-key-google_signin, .st-key-google_register) button::before {
   content: ""; flex: none; width: 1.75rem; height: 1.75rem; margin-right: .75rem;
   border-radius: 50%; background: #fff url("__GOOGLE_G__") center / 1.05rem no-repeat;
 }
@@ -143,10 +154,9 @@ SIGNED_OUT_CSS = """
 .ava-caption .ava-w:nth-child(9)  { animation-delay: 560ms; }
 .ava-caption .ava-w:nth-child(10) { animation-delay: 630ms; }
 .ava-follow { animation: ava-rise 240ms ease-out 700ms both; }
-.st-key-google_signin { animation: ava-rise 240ms ease-out 820ms both; }
-.ava-note.ava-follow { animation-delay: 940ms; }
+.st-key-signin_tabs { animation: ava-rise 240ms ease-out 820ms both; }
 @media (prefers-reduced-motion: reduce) {
-  .ava-caption .ava-w, .ava-follow, .st-key-google_signin { animation: none; }
+  .ava-caption .ava-w, .ava-follow, .st-key-signin_tabs { animation: none; }
 }
 
 @media (max-width: 640px) {
@@ -181,6 +191,7 @@ def _note(text: str, follow: bool = False):
 
 
 def sign_in_page():
+    from core import notify
     from core.settings import get_settings
     settings = get_settings()
     how = ("Paste a YouTube link or upload a recording." if settings.enable_youtube
@@ -190,13 +201,32 @@ def sign_in_page():
         _header("Ask questions about any video or meeting recording.",
                 f"{how} You get the full transcript, a short summary, "
                 "and answers drawn from what was actually said.", caption=True)
-        st.button("Continue with Google", key="google_signin", on_click=st.login)
-        if settings.signup_mode == "request":
-            _note("New here? Continue with Google and request access. The admin approves "
-                  "new accounts. Other users can't see your meetings.", follow=True)
-        else:
-            _note("This app is invite only. Ask the person who runs it to add your "
-                  "Google account. Other users can't see your meetings.", follow=True)
+
+        with st.container(key="signin_tabs"):
+            sign_in, register = st.tabs(["Sign in", "Register"])
+            with sign_in:
+                st.markdown('<p class="ava-tab-lede">Already approved? Sign in with the Google '
+                            "account you registered with.</p>", unsafe_allow_html=True)
+                st.button("Continue with Google", key="google_signin", on_click=st.login)
+                _note("Your meetings are private: other users can't see them.")
+            with register:
+                if settings.signup_mode == "request":
+                    last = ("You'll get an email when you're approved, then sign in."
+                            if notify.enabled() else "Once you're approved, sign in.")
+                    st.markdown(
+                        '<ol class="ava-steps">'
+                        "<li>Continue with the Google account you want to use.</li>"
+                        "<li>Click <strong>Request access</strong>.</li>"
+                        f"<li>The admin reviews your request. {last}</li></ol>",
+                        unsafe_allow_html=True,
+                    )
+                    st.button("Register with Google", key="google_register", on_click=st.login)
+                    _note("Google only shares your name and email address with this app. "
+                          "No password is stored here.")
+                else:
+                    st.markdown('<p class="ava-tab-lede">Accounts are by invitation. Ask the person '
+                                "who runs this app to add your Google account, then sign in.</p>",
+                                unsafe_allow_html=True)
 
 
 def request_page(email: str, status, on_request, on_request_args=(), error: str = None):
@@ -205,8 +235,11 @@ def request_page(email: str, status, on_request, on_request_args=(), error: str 
     st.markdown(SIGNED_OUT_CSS, unsafe_allow_html=True)
     with st.container(key="signedout"):
         if status == "pending":
+            from core import notify
+            then = (f"You'll get an email at {who} when it's approved."
+                    if notify.enabled() else "You can use the app as soon as it's approved.")
             _header("Request sent.", f"Your request for {who} is waiting for the admin's approval. "
-                    "You can use the app as soon as it's approved.", wide=True)
+                    f"{then}", wide=True)
             st.button("Check again", key="request_check")
         else:
             _header("Request access.", f"You're signed in as {who}. This app is invite only: "

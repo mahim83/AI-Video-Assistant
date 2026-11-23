@@ -223,6 +223,8 @@ All settings live in `.env`. The template is `.env.example`.
 | `AUTH_MODE` | No | `oidc` | `oidc` for Google sign-in, `off` for local use only. |
 | `ADMIN_EMAILS` | With sign-in | | Comma-separated admin emails. Admins invite users in the app. |
 | `ALLOWED_EMAILS` | No | | Comma-separated emails allowed as regular users without an invite. |
+| `SMTP_USER`, `SMTP_PASSWORD` | No | | Gmail address and app password for email notifications: admins hear about access requests, people hear when they're approved. Off until both are set. `SMTP_HOST`/`SMTP_PORT` default to Gmail (465). |
+| `NOTIFY_EMAILS` | No | `ADMIN_EMAILS` | Who gets the access-request emails. |
 | `SIGNUP_MODE` | No | `request` | `request`: a new Google account can ask for access, and an admin approves it on the Admin page. `invite`: only emails an admin added can sign in. |
 | `DATA_DIR` | No | `data` | Where meetings, indexes, users and the audit log are stored. |
 | `ENABLE_WHISPER` | No | `true` | Offer the Whisper engine. The server image turns it off. |

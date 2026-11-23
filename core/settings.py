@@ -64,6 +64,15 @@ class Settings:
     # full disk stops new work instead of corrupting a half-written index.
     min_free_disk_gb: int
 
+    # Email notifications (core/notify.py). Off until SMTP_USER and
+    # SMTP_PASSWORD are set; with Gmail, the password is an app password.
+    smtp_host: str
+    smtp_port: int
+    smtp_user: str
+    smtp_password: str
+    notify_emails: frozenset
+    app_url: str
+
     allowed_video_hosts: frozenset
     enable_whisper: bool
     # YouTube blocks downloads from cloud servers ("Sign in to confirm you're
@@ -81,10 +90,20 @@ def get_settings() -> Settings:
     if signup_mode not in ("request", "invite"):
         raise RuntimeError(f"SIGNUP_MODE must be 'request' or 'invite', got {signup_mode!r}")
 
+    admin_emails = _set("ADMIN_EMAILS")
+    domain = os.getenv("DOMAIN", "").strip()
+
     return Settings(
+        smtp_host=os.getenv("SMTP_HOST", "smtp.gmail.com").strip(),
+        smtp_port=_int("SMTP_PORT", 465),
+        smtp_user=os.getenv("SMTP_USER", "").strip(),
+        # Gmail shows app passwords in groups of four; spaces are not part of it.
+        smtp_password=os.getenv("SMTP_PASSWORD", "").replace(" ", ""),
+        notify_emails=_set("NOTIFY_EMAILS") or admin_emails,
+        app_url=os.getenv("APP_URL", "").strip() or (f"https://{domain}" if domain else "http://localhost:8501"),
         data_dir=os.getenv("DATA_DIR", "data").strip() or "data",
         auth_mode=auth_mode,
-        admin_emails=_set("ADMIN_EMAILS"),
+        admin_emails=admin_emails,
         allowed_emails=_set("ALLOWED_EMAILS"),
         signup_mode=signup_mode,
         max_video_minutes=_int("MAX_VIDEO_MINUTES", 90),

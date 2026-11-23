@@ -9,7 +9,7 @@ import re
 import time
 from dataclasses import dataclass
 
-from core import db
+from core import db, notify
 from core.errors import AccessDenied
 from core.settings import get_settings
 
@@ -188,6 +188,7 @@ def request_access(email: str, sub=None):
             (email, str(sub) if sub else None, time.time()),
         )
     db.audit("access_requested", email=email)
+    notify.new_access_request(email)
 
 
 def list_requests(actor: User) -> list:
@@ -211,6 +212,7 @@ def approve_request(actor: User, email: str):
         raise ValueError(f"{email} has no pending request.")
     add_user(actor, email, "user")   # also clears the request
     db.audit("request_approved", actor, detail=email)
+    notify.access_approved(email)
 
 
 def reject_request(actor: User, email: str):

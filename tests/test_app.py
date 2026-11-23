@@ -102,7 +102,7 @@ def test_unverified_email_cannot_request(monkeypatch):
 def test_signed_out_sees_only_sign_in(monkeypatch):
     at = run(monkeypatch)
     assert not at.exception
-    assert [b.label for b in at.button] == ["Continue with Google"]
+    assert [b.label for b in at.button] == ["Continue with Google", "Register with Google"]
     assert not at.sidebar.radio
 
 

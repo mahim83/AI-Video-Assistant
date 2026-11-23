@@ -1,0 +1,67 @@
+"""
+Email notifications through an SMTP account (Gmail with an app password by
+default): admins hear about new access requests, and people hear when
+they've been approved.
+
+Sending happens on a background thread so a slow or failing mail server
+never holds up the page, and a failure is logged rather than shown. With no
+SMTP_USER/SMTP_PASSWORD set, nothing is sent.
+"""
+import logging
+import smtplib
+import ssl
+import threading
+from email.message import EmailMessage
+
+from core.settings import get_settings
+
+log = logging.getLogger(__name__)
+
+
+def enabled() -> bool:
+    s = get_settings()
+    return bool(s.smtp_user and s.smtp_password)
+
+
+def _send(to: list, subject: str, body: str):
+    s = get_settings()
+    try:
+        msg = EmailMessage()   # refuses CR/LF in headers, so no header injection
+        msg["From"] = f"AI Video Assistant <{s.smtp_user}>"
+        msg["To"] = ", ".join(to)
+        msg["Subject"] = subject
+        msg.set_content(body)
+        with smtplib.SMTP_SSL(s.smtp_host, s.smtp_port, timeout=20,
+                              context=ssl.create_default_context()) as smtp:
+            smtp.login(s.smtp_user, s.smtp_password)
+            smtp.send_message(msg)
+        log.info("email sent: %s", subject)
+    except Exception:
+        log.exception("email failed: %s", subject)
+
+
+def send(to, subject: str, body: str):
+    recipients = [t for t in ([to] if isinstance(to, str) else to) if t]
+    if not enabled() or not recipients:
+        return
+    threading.Thread(target=_send, args=(recipients, subject, body), daemon=True).start()
+
+
+def new_access_request(email: str):
+    s = get_settings()
+    send(
+        sorted(s.notify_emails),
+        f"Access request: {email}",
+        f"{email} signed in with Google and asked to use AI Video Assistant.\n\n"
+        f"Approve or reject it on the Admin page: {s.app_url}\n",
+    )
+
+
+def access_approved(email: str):
+    s = get_settings()
+    send(
+        email,
+        "You can now use AI Video Assistant",
+        "Your request to use AI Video Assistant was approved.\n\n"
+        f"Sign in with this Google account: {s.app_url}\n",
+    )
