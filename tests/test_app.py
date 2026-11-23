@@ -123,19 +123,30 @@ def test_unverified_email_cannot_request(monkeypatch):
     assert "Complete your registration." not in texts(at)
 
 
-def test_signed_out_sees_only_sign_in(monkeypatch):
+def test_front_page_has_no_form(monkeypatch):
     at = run(monkeypatch)
+    assert not at.exception
+    # The front page explains the app; the forms live on their own pages.
+    assert not at.button and not at.text_input
+    assert "Ask questions about any video" in texts(at)
+    assert 'href="?page=signin"' in texts(at) and 'href="?page=register"' in texts(at)
+    assert not at.sidebar.radio
+
+
+def test_sign_in_page_is_only_sign_in(monkeypatch):
+    at = run(monkeypatch, page="signin")
     assert not at.exception
     # Without SMTP settings, email accounts aren't offered: Google only.
     assert [b.label for b in at.button] == ["Sign in with Google"]
-    assert "Don't have an account?" in texts(at) and "Sign up" in texts(at)
-    assert not at.sidebar.radio
+    assert "Don't have an account?" in texts(at)
+    assert "Ask questions about any video" not in texts(at)
+    assert "How it works" not in texts(at)
 
 
 def test_top_bar_links_to_sign_in_and_sign_up(monkeypatch):
     at = run(monkeypatch)
     bar = next(m.value for m in at.markdown if 'class="ava-topbar"' in m.value)
-    assert 'href="?"' in bar and ">Sign in</a>" in bar
+    assert 'href="?page=signin"' in bar and ">Sign in</a>" in bar
     assert 'href="?page=register"' in bar and ">Sign up</a>" in bar
 
     # With sign-ups off, the bar offers Sign in only.
@@ -149,7 +160,7 @@ def test_top_bar_links_to_sign_in_and_sign_up(monkeypatch):
 
 def test_sign_in_page_offers_both_with_email_set_up(monkeypatch):
     enable_email(monkeypatch)
-    at = run(monkeypatch)
+    at = run(monkeypatch, page="signin")
     labels = [b.label for b in at.button]
     assert "Sign in with Google" in labels and "Sign in" in labels
     assert "or sign in with email" in texts(at) and "Forgot your password?" in texts(at)

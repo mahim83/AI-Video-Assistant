@@ -90,12 +90,14 @@ def _submit_request(email: str, sub, name: str, reason: str):
 
 def _signed_out_pages():
     page = st.query_params.get("page")
-    if page == "register":
+    if page == "signin":
+        ui.sign_in_page()
+    elif page == "register":
         ui.register_page()
     elif page == "reset":
         ui.reset_page()
     else:
-        ui.sign_in_page()
+        ui.home_page()
     st.stop()
 
 

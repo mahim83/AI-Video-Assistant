@@ -127,35 +127,38 @@ SIGNED_OUT_CSS = """
 .ava-note a:focus-visible { outline: 2px solid var(--ava-accent); outline-offset: 2px; border-radius: 2px; }
 .st-key-signedout [data-testid="stForm"], .st-key-signin_box [data-testid="stForm"] { margin-top: .5rem; max-width: 26rem; }
 
-/* Sign in | Sign up: two links styled as tabs. */
-.ava-authtabs { display: flex; gap: 1.75rem; border-bottom: 1px solid var(--ava-rule);
-                margin: 0 0 1.25rem 0; max-width: 26rem; }
-.ava-authtabs a { padding: .55rem 0; margin-bottom: -1px; font-size: 1rem; font-weight: 600;
-                  color: var(--ava-muted); text-decoration: none; border-bottom: 2px solid transparent;
-                  transition: color 150ms ease-out, border-color 150ms ease-out; }
-.ava-authtabs a:hover { color: var(--ava-ink); }
-.ava-authtabs a.ava-on { color: var(--ava-accent); border-bottom-color: var(--ava-accent); }
-.ava-authtabs a:focus-visible { outline: 2px solid var(--ava-accent); outline-offset: 3px; border-radius: 2px; }
-
 /* Top bar: brand on the left, Sign in and Sign up on the right.
    Starts below Streamlit's own toolbar so its menu never covers the buttons. */
 .ava-topbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem;
               margin: 1.5rem 0 3rem 0; padding-bottom: 1.25rem; border-bottom: 1px solid var(--ava-rule); }
-.ava-topnav { display: flex; align-items: center; gap: .5rem; }
-[data-testid="stMarkdownContainer"] .ava-topnav a {
+.ava-topnav, .ava-actions { display: flex; align-items: center; gap: .5rem; }
+[data-testid="stMarkdownContainer"] :is(.ava-topnav, .ava-actions) a {
   display: inline-flex; align-items: center; min-height: 2.5rem; padding: 0 1rem;
   border-radius: .375rem; border: 1px solid transparent; font-size: .9375rem; font-weight: 600;
   text-decoration: none; transition: background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out;
 }
-[data-testid="stMarkdownContainer"] .ava-topnav a.ava-top-in { color: var(--ava-ink); border-color: var(--ava-rule);
-                                                              background: var(--ava-raised); }
-[data-testid="stMarkdownContainer"] .ava-topnav a.ava-top-in:hover { color: var(--ava-accent); border-color: var(--ava-accent); }
-[data-testid="stMarkdownContainer"] .ava-topnav a.ava-top-up { color: #fff; background: var(--ava-accent);
-                                                              border-color: var(--ava-accent); }
-[data-testid="stMarkdownContainer"] .ava-topnav a.ava-top-up:hover { background: var(--ava-accent-strong);
-                                                                    border-color: var(--ava-accent-strong); }
-[data-testid="stMarkdownContainer"] .ava-topnav a:focus-visible { outline: 2px solid var(--ava-accent); outline-offset: 2px; }
+[data-testid="stMarkdownContainer"] :is(.ava-topnav, .ava-actions) a.ava-top-in {
+  color: var(--ava-ink); border-color: var(--ava-rule); background: var(--ava-raised); }
+[data-testid="stMarkdownContainer"] :is(.ava-topnav, .ava-actions) a.ava-top-in:hover {
+  color: var(--ava-accent); border-color: var(--ava-accent); }
+[data-testid="stMarkdownContainer"] :is(.ava-topnav, .ava-actions) a.ava-top-up {
+  color: #fff; background: var(--ava-accent); border-color: var(--ava-accent); }
+[data-testid="stMarkdownContainer"] :is(.ava-topnav, .ava-actions) a.ava-top-up:hover {
+  background: var(--ava-accent-strong); border-color: var(--ava-accent-strong); }
+[data-testid="stMarkdownContainer"] :is(.ava-topnav, .ava-actions) a:focus-visible {
+  outline: 2px solid var(--ava-accent); outline-offset: 2px; }
+/* The page you're on is marked in the bar. */
+[data-testid="stMarkdownContainer"] .ava-topnav a.ava-top-in[aria-current="page"] {
+  color: var(--ava-accent); border-color: var(--ava-accent); }
+/* The front page's buttons: the same pair, larger. */
+.ava-actions { gap: .75rem; margin: 0 0 1.25rem 0; }
+[data-testid="stMarkdownContainer"] .ava-actions a { min-height: 3rem; padding: 0 1.5rem; font-size: 1rem; }
+[data-testid="stMarkdownContainer"] a.ava-home { text-decoration: none; color: inherit; }
+[data-testid="stMarkdownContainer"] a.ava-home:focus-visible { outline: 2px solid var(--ava-accent); outline-offset: 4px;
+                                                             border-radius: 2px; }
 .ava-signedout.ava-under-bar { padding-top: 0; }
+/* Sign in and Sign up pages: one narrow column under the bar. */
+.st-key-signin_box { max-width: 28rem; }
 
 /* "or sign in with email": a quiet rule with the words in the middle. */
 .ava-or { display: flex; align-items: center; gap: .75rem; margin: 1.5rem 0 .25rem 0; max-width: 26rem;
@@ -256,7 +259,7 @@ SIGNED_OUT_CSS = """
 .ava-wave.ava-played { animation: ava-progress 1100ms ease-out both; }
 .ava-head { animation: ava-playhead 1100ms ease-out both; }
 .ava-follow { animation: ava-rise 240ms ease-out 250ms both; }
-.st-key-signin_box { animation: ava-rise 240ms ease-out 400ms both; }
+.st-key-signin_box { animation: ava-rise 200ms ease-out both; }
 @media (prefers-reduced-motion: reduce) {
   .ava-caption .ava-w, .ava-wave.ava-played, .ava-head, .ava-follow, .st-key-signin_box { animation: none; }
 }
@@ -428,6 +431,7 @@ def _landing_sections(settings) -> str:
 
 
 # Signed-out pages have their own addresses, so they can be linked and shared.
+SIGNIN_HREF = "?page=signin"
 REGISTER_HREF = "?page=register"
 RESET_HREF = "?page=reset"
 HOME_HREF = "?"
@@ -483,22 +487,12 @@ def _top_bar(active: str, signup: bool):
     def item(key, label, href, cls):
         current = ' aria-current="page"' if key == active else ""
         return f'<a class="{cls}" href="{href}" target="_self"{current}>{label}</a>'
-    links = item("signin", "Sign in", HOME_HREF, "ava-top-in")
+    links = item("signin", "Sign in", SIGNIN_HREF, "ava-top-in")
     if signup:
         links += item("signup", "Sign up", REGISTER_HREF, "ava-top-up")
-    st.markdown(f'<header class="ava-topbar">{BRAND}<nav class="ava-topnav" aria-label="Account">'
+    home = f'<a class="ava-home" href="{HOME_HREF}" target="_self" aria-label="Home">{BRAND}</a>'
+    st.markdown(f'<header class="ava-topbar">{home}<nav class="ava-topnav" aria-label="Account">'
                 f"{links}</nav></header>", unsafe_allow_html=True)
-
-
-def _auth_tabs(active: str):
-    """Sign in | Sign up. Links, not st.tabs, so each has its own address and
-    the "Don't have an account? Sign up" line can switch to the other."""
-    def tab(key, label, href):
-        on = key == active
-        current = ' aria-current="page"' if on else ""
-        return f'<a class="{"ava-on" if on else ""}" href="{href}" target="_self"{current}>{label}</a>'
-    st.markdown(f'<nav class="ava-authtabs" aria-label="Account">{tab("signin", "Sign in", HOME_HREF)}'
-                f'{tab("signup", "Sign up", REGISTER_HREF)}</nav>', unsafe_allow_html=True)
 
 
 def _signin_panel(settings, email_ok: bool):
@@ -520,7 +514,7 @@ def _signup_panel(settings, email_ok: bool):
     if settings.signup_mode != "request":
         st.markdown('<p class="ava-tab-lede">Accounts are by invitation. Ask the person who runs '
                     "this app to add your account, then sign in.</p>", unsafe_allow_html=True)
-        _note(f"Already registered? {_link(HOME_HREF, 'Sign in')}")
+        _note(f"Already registered? {_link(SIGNIN_HREF, 'Sign in')}")
         return
 
     # Step two of the email path: the code that proves the address is theirs.
@@ -551,10 +545,6 @@ def _signup_panel(settings, email_ok: bool):
             st.rerun()
         return
 
-    last = ("You'll get an email as soon as you're approved."
-            if email_ok else "Sign in again once you're approved.")
-    st.markdown(f'<p class="ava-tab-lede">New accounts are approved by the admin before they can be '
-                f"used. {last}</p>", unsafe_allow_html=True)
     st.button("Sign up with Google", key="google_register", on_click=st.login)
 
     if email_ok:
@@ -586,19 +576,29 @@ def _signup_panel(settings, email_ok: bool):
                     st.rerun()
                 except local_auth.AuthError as e:
                     st.error(str(e))
-    _note(f"Already registered? {_link(HOME_HREF, 'Sign in')}")
+    _note(f"Already registered? {_link(SIGNIN_HREF, 'Sign in')}")
 
 
-def sign_in_page(active: str = "signin"):
-    """The front page: what the app does, and the Sign in | Sign up box."""
-    from core import notify
+def _hero_actions(signup: bool) -> str:
+    """The front page's two ways in, the same as the top bar's."""
+    if signup:
+        links = (f'<a class="ava-top-up" href="{REGISTER_HREF}" target="_self">Sign up</a>'
+                 f'<a class="ava-top-in" href="{SIGNIN_HREF}" target="_self">Sign in</a>')
+    else:
+        links = f'<a class="ava-top-up" href="{SIGNIN_HREF}" target="_self">Sign in</a>'
+    return (f'<div class="ava-actions ava-follow">{links}</div>'
+            '<p class="ava-note ava-follow">Your meetings are private: other users can\'t see them.</p>')
+
+
+def home_page():
+    """The front page: what the app does. Sign in and Sign up have their own pages."""
     from core.settings import get_settings
     settings = get_settings()
-    email_ok = notify.enabled()
+    signup = settings.signup_mode == "request"
     how = ("Paste a YouTube link or upload a recording." if settings.enable_youtube
            else "Upload a recording of a meeting, lecture or video.")
     st.markdown(SIGNED_OUT_CSS, unsafe_allow_html=True)
-    _top_bar(active, settings.signup_mode == "request")
+    _top_bar("home", signup)
     left, right = st.columns([11, 10], gap="large")
     with right:
         st.markdown(_player(), unsafe_allow_html=True)
@@ -607,20 +607,48 @@ def sign_in_page(active: str = "signin"):
                 f"{how} You get the full transcript, a short summary, "
                 "and answers drawn from what was actually said.", caption=False, follow=True,
                 brand=False)
-        with st.container(key="signin_box"):
-            _auth_tabs(active)
-            if active == "signup":
-                _signup_panel(settings, email_ok)
-            else:
-                _signin_panel(settings, email_ok)
-            _note("Your meetings are private: other users can't see them.")
+        st.markdown(_hero_actions(signup), unsafe_allow_html=True)
 
     st.markdown(_landing_sections(settings), unsafe_allow_html=True)
 
 
+def _footer():
+    st.markdown(f'<footer class="ava-footer"><p>AI Video Assistant, made by {CREDIT}</p>'
+                f'<p>{_github_link()}</p></footer>', unsafe_allow_html=True)
+
+
+def sign_in_page():
+    """Just the sign-in form (?page=signin)."""
+    from core import notify
+    from core.settings import get_settings
+    settings = get_settings()
+    st.markdown(SIGNED_OUT_CSS, unsafe_allow_html=True)
+    _top_bar("signin", settings.signup_mode == "request")
+    with st.container(key="signin_box"):
+        _header("Sign in.", "Use your Google account or the email and password you registered with."
+                if notify.enabled() else "Use the Google account you registered with.", brand=False)
+        _signin_panel(settings, notify.enabled())
+    _footer()
+
+
 def register_page():
-    """The front page with the Sign up tab open (?page=register)."""
-    sign_in_page("signup")
+    """Just the sign-up form (?page=register)."""
+    from core import notify
+    from core.settings import get_settings
+    settings = get_settings()
+    email_ok = notify.enabled()
+    st.markdown(SIGNED_OUT_CSS, unsafe_allow_html=True)
+    _top_bar("signup", settings.signup_mode == "request")
+    with st.container(key="signin_box"):
+        if settings.signup_mode == "request":
+            last = ("You'll get an email as soon as you're approved."
+                    if email_ok else "Sign in again once you're approved.")
+            lede = f"New accounts are approved by the admin before they can be used. {last}"
+        else:
+            lede = "Accounts on AI Video Assistant are by invitation."
+        _header("Create your account.", lede, brand=False)
+        _signup_panel(settings, email_ok)
+    _footer()
 
 
 def reset_page():
@@ -668,7 +696,7 @@ def reset_page():
                 st.rerun()
             except local_auth.AuthError as e:
                 st.error(str(e))
-        _note(f"Signed in with Google? Google manages that password. {_link(HOME_HREF, 'Back to sign in')}.")
+        _note(f"Signed in with Google? Google manages that password. {_link(SIGNIN_HREF, 'Back to sign in')}.")
 
 
 def request_page(email: str, status, on_submit, default_name: str = "", error: str = None,
