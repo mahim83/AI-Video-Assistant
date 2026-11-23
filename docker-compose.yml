@@ -1,0 +1,51 @@
+# Production stack: the app, and Caddy in front of it for HTTPS.
+# Only Caddy is reachable from the internet; the app listens on the internal
+# network. See DEPLOY.md.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Set here as well as in the image, so a stray AUTH_MODE=off in .env
+      # can't turn sign-in off on the server.
+      AUTH_MODE: oidc
+      DATA_DIR: /app/data
+      ENABLE_WHISPER: "false"
+    volumes:
+      - ./data:/app/data
+      - ./.streamlit/secrets.toml:/app/.streamlit/secrets.toml:ro
+    expose:
+      - "8501"
+    # RAM cap for the app (it uses ~0.8-1.2 GB). On a 2 GB server set
+    # APP_MEM_LIMIT=1600m in .env and add swap (DEPLOY-AWS.md, step 7).
+    mem_limit: ${APP_MEM_LIMIT:-3g}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env, e.g. DOMAIN=video.example.com}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

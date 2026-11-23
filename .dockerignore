@@ -1,0 +1,35 @@
+.git
+.gitignore
+.venv
+.venv-eval
+venv
+env
+__pycache__
+*.py[cod]
+.pytest_cache
+
+# Secrets: mounted or passed at run time, never baked into the image.
+.env
+.env.*
+.streamlit/secrets.toml
+*.key
+*.pem
+cookies*.txt
+
+# Data: lives in the mounted ./data volume.
+data
+outputs
+downloads
+vector_db
+
+docs
+tests
+evals
+*.pdf
+*.wav
+*.mp3
+*.mp4
+*.m4a
+*.webm
+.vscode
+.idea

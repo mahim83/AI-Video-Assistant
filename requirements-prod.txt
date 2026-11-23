@@ -1,0 +1,25 @@
+# Server dependencies, pinned to the versions this app was tested with.
+# The Dockerfile installs CPU-only PyTorch first, then this file.
+# Not included: openai-whisper (ENABLE_WHISPER=false on the server) and the
+# eval packages.
+
+streamlit[auth]==1.61.1        # [auth] adds Authlib, needed by st.login
+yt-dlp==2026.8.19              # YouTube changes often: bump this first when downloads break
+pydub==0.25.1
+
+langchain-core==1.6.6
+langchain-community==0.4.2
+langchain-text-splitters==1.1.2
+langchain-openai==1.6.6
+langchain-chroma==1.1.0
+openai==3.22.0
+
+chromadb==1.5.9
+sentence-transformers==5.7.0
+transformers==5.15.0
+huggingface-hub==1.27.0
+rank-bm25==0.2.2
+numpy==2.5.2
+
+python-dotenv==1.2.2
+requests==2.34.2

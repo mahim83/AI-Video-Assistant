@@ -7,22 +7,20 @@ from dotenv import load_dotenv
 load_dotenv()   # MUST be before any core/ imports — transcriber.py reads
                 # os.getenv("SARVAM_API_KEY") at module level, i.e. at import time.
 
-import json
-import os
 import re
 from datetime import datetime
 
-from utils.audio_processor import process_input, in_download_dir
+from utils.audio_processor import process_input, wav_minutes
 from core.transcriber import transcribe_all
 from core.summarizer import summarize, generate_title
 from core.rag_engine import build_rag_chain, load_rag_chain, ask_question
-from core.vector_store import delete_vector_store, remove_deleted_dirs
+from core.errors import GuardrailError
+from core import storage
+from core.users import LOCAL_USER
 
-OUTPUT_DIR = "outputs"
-
-# Runs once per process, before any index is opened, so vector folders a
-# previous delete found locked can be removed now.
-remove_deleted_dirs()
+# Runs once per process, before any index is opened: finishes deletes a
+# previous run found locked and removes audio a crashed job left behind.
+storage.cleanup_on_start()
 
 
 def _slug(text: str) -> str:
@@ -31,49 +29,18 @@ def _slug(text: str) -> str:
     return s[:40] or "meeting"
 
 
-def save_result(result: dict, source: str) -> str:
-    """Persist everything except the rag_chain, which is a live object."""
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-    payload = {k: v for k, v in result.items() if k != "rag_chain"}
-    payload["source"] = source
-    payload["saved_at"] = datetime.now().isoformat(timespec="seconds")
-
-    path = os.path.join(OUTPUT_DIR, payload["collection_name"] + ".json")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
-    return path
-
-
-def list_saved() -> list:
-    if not os.path.isdir(OUTPUT_DIR):
-        return []
-    return sorted(f for f in os.listdir(OUTPUT_DIR) if f.endswith(".json"))
-
-
-def load_saved(filename: str) -> dict:
-    with open(os.path.join(OUTPUT_DIR, filename), encoding="utf-8") as f:
-        return json.load(f)
-
-
-def delete_saved(filename: str):
+def run_pipeline(source: str, language: str = "english", on_step=None, *,
+                 work_dir: str, persist_directory: str, input_format: str = None,
+                 max_minutes: float = None, before_transcribe=None) -> dict:
     """
-    Remove a saved meeting: its search index, its audio in downloads/, and the
-    JSON last, so a failure part-way leaves it listed and the delete can be retried.
+    Process one video. Audio is written only inside work_dir, which the caller
+    creates and deletes (storage.job_dir), and the search index goes to
+    persist_directory.
+
+    on_step(msg) lets a UI report progress; the CLI just prints.
+    before_transcribe(minutes) runs once the audio length is known and before
+    the first paid API call; the web app charges the user's quota there.
     """
-    meeting = load_saved(filename)
-    delete_vector_store(meeting["collection_name"])
-    # The list comes from a file on disk, so re-check that each path is in
-    # downloads/ before deleting. Meetings saved before audio was recorded
-    # have no list, and their audio stays.
-    for path in meeting.get("audio_files", []):
-        if in_download_dir(path) and os.path.isfile(path):
-            os.remove(path)
-    os.remove(os.path.join(OUTPUT_DIR, filename))
-
-
-def run_pipeline(source: str, language: str = "english", on_step=None) -> dict:
-    """on_step(msg) lets a UI report progress; the CLI just prints."""
     def step(msg):
         print(msg)
         if on_step:
@@ -82,11 +49,17 @@ def run_pipeline(source: str, language: str = "english", on_step=None) -> dict:
     step("starting AI Video Assistant")
 
     step("Downloading and preparing audio...")
-    wav_path, chunks = process_input(source)
+    wav_path, chunks = process_input(source, work_dir, input_format=input_format, max_minutes=max_minutes)
+    minutes = wav_minutes(wav_path)
+    if before_transcribe:
+        before_transcribe(minutes)
 
     step(f"Transcribing {len(chunks)} chunk(s) with {language}...")
     transcript = transcribe_all(chunks, language)
-    print(f"raw transcription (first 300 characters ) {transcript[:300]}")
+    if not transcript.strip():
+        raise GuardrailError("No speech was found in this recording.")
+    # Word count only: transcripts are users' private content and don't belong in logs.
+    print(f"Transcribed {len(transcript.split())} words.")
 
     step("Generating title...")
     title = generate_title(transcript)
@@ -96,16 +69,15 @@ def run_pipeline(source: str, language: str = "english", on_step=None) -> dict:
 
     step("Building searchable index...")
     collection_name = f"{_slug(title)}_{datetime.now():%Y%m%d_%H%M%S}"
-    rag_chain = build_rag_chain(transcript, collection_name=collection_name)
+    rag_chain = build_rag_chain(transcript, collection_name=collection_name,
+                                persist_directory=persist_directory)
 
     return {
         "title": title,
         "transcript": transcript,
         "summary": summary,
         "collection_name": collection_name,
-        # What this run wrote to downloads/ (an uploaded copy, the WAV and its
-        # chunks), so deleting the meeting can remove its audio too.
-        "audio_files": [p for p in [source, wav_path, *chunks] if in_download_dir(p)],
+        "audio_minutes": round(minutes, 1),
         "rag_chain": rag_chain,
     }
 
@@ -133,10 +105,13 @@ def chat(rag_chain):
 
 
 if __name__ == "__main__":
+    # The terminal app runs on your own computer, so it uses the "local"
+    # user's folder, the same one the web app uses with AUTH_MODE=off.
+    space = storage.user_space(LOCAL_USER.id)
     result = None
     source = None
 
-    saved = list_saved()
+    saved = storage.list_meetings(space)
     if saved:
         print("\nSaved meetings:")
         for i, name in enumerate(saved, 1):
@@ -148,9 +123,10 @@ if __name__ == "__main__":
         answer = input("Pick a number to reopen, or paste a YouTube URL / file path: ").strip()
 
         if answer.isdigit() and 1 <= int(answer) <= len(saved):
-            result = load_saved(saved[int(answer) - 1])
+            result = storage.load_meeting(space, saved[int(answer) - 1])
             # Reopens stored embeddings or rebuilds a missing index from the transcript.
-            result["rag_chain"] = load_rag_chain(result["collection_name"], result["transcript"])
+            result["rag_chain"] = load_rag_chain(result["collection_name"], result["transcript"],
+                                                 persist_directory=space.vector_dir)
             print(f"Loaded: {result['title']}")
         elif answer.isdigit():
             print(f"No meeting numbered {answer}. Starting a new one instead.")
@@ -158,15 +134,16 @@ if __name__ == "__main__":
             source = answer
 
     if result is None:
-        # Keep asking rather than dying deep inside pydub on an empty string.
+        # Keep asking rather than dying deep inside FFmpeg on an empty string.
         while not source:
             source = input("Enter YouTube URL or local file path: ").strip()
             if not source:
                 print("  Nothing entered — paste a YouTube URL or a path to an audio/video file.")
 
         language = input("Language [english / hinglish / whisper] (default english): ").strip() or "english"
-        result = run_pipeline(source, language)
-        print(f"\n💾 Saved to {save_result(result, source)}")
+        with storage.job_dir(space) as work:
+            result = run_pipeline(source, language, work_dir=work, persist_directory=space.vector_dir)
+        print(f"\n💾 Saved to {storage.save_meeting(space, result, source)}")
 
     print_result(result)
     chat(result["rag_chain"])

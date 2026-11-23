@@ -1,6 +1,36 @@
+[server]
 # Bind to the loopback interface only. Without this, Streamlit listens on
 # every network interface by default, so anyone else on the same Wi-Fi or LAN
 # can open the "Network URL" it prints and use the app — spending your API
 # quota and reading your saved meetings — even though nothing was deployed.
-[server]
+# The Docker image overrides this (STREAMLIT_SERVER_ADDRESS=0.0.0.0) and
+# always runs with Google sign-in on; the app refuses AUTH_MODE=off unless
+# this address is a loopback one.
 address = "localhost"
+# MB. Keep at or above MAX_UPLOAD_MB; the app enforces its own limit too.
+maxUploadSize = 200
+enableXsrfProtection = true
+enableCORS = true
+
+[browser]
+gatherUsageStats = false
+
+# "Caption track": cool paper surface, slate ink, one deep-teal accent.
+# Bricolage Grotesque for the interface; Newsreader for reading text
+# (transcripts, summaries, answers) is loaded in core/ui.py.
+[theme]
+base = "light"
+primaryColor = "#0E7C6B"
+backgroundColor = "#F4F6F8"
+secondaryBackgroundColor = "#E9EEF2"
+textColor = "#1C2733"
+linkColor = "#0E7C6B"
+borderColor = "#D8DEE5"
+showWidgetBorder = true
+baseRadius = "0.375rem"
+font = "Bricolage Grotesque:https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&display=swap, sans-serif"
+headingFontWeights = [600, 600, 600, 600, 600, 600]
+
+[theme.sidebar]
+backgroundColor = "#EAEEF2"
+secondaryBackgroundColor = "#F8FAFB"

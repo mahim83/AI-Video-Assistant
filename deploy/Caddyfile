@@ -1,0 +1,21 @@
+# Caddy gets and renews the HTTPS certificate for DOMAIN automatically, and
+# proxies WebSockets, which Streamlit needs, without extra settings.
+{$DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	# Slightly above MAX_UPLOAD_MB (200 MB by default); raise both together.
+	request_body {
+		max_size 210MB
+	}
+
+	reverse_proxy app:8501
+}

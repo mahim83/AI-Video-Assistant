@@ -18,10 +18,12 @@ def get_embeddings():
         model_kwargs = {"device" : 'cpu'}
     )
 
-def build_vector_store(transcript : str, collection_name : str = None)->Chroma:
+def build_vector_store(transcript : str, collection_name : str = None,
+                       persist_directory : str = CHROMA_DIR)->Chroma:
     # Each meeting gets its own collection. With a single shared collection,
     # every new transcript piles into the same one and answers end up mixing
-    # content from unrelated meetings.
+    # content from unrelated meetings. In the web app, persist_directory is
+    # the signed-in user's own folder, so users never share an index.
     collection_name = collection_name or COLLECTION_NAME
 
     print("Building vector Store")
@@ -42,16 +44,16 @@ def build_vector_store(transcript : str, collection_name : str = None)->Chroma:
         documents= docs,
         embedding=embeddings,
         collection_name=collection_name,
-        persist_directory=CHROMA_DIR
+        persist_directory=persist_directory
     )
 
     return vector_store
 
 
 
-def _vector_dirs(collection_name : str) -> list:
+def _vector_dirs(collection_name : str, persist_directory : str = CHROMA_DIR) -> list:
     """Folders holding a collection's vectors, looked up in Chroma's own catalogue."""
-    db = os.path.join(CHROMA_DIR, "chroma.sqlite3")
+    db = os.path.join(persist_directory, "chroma.sqlite3")
     if not os.path.isfile(db):
         return []
     con = sqlite3.connect(db)
@@ -68,18 +70,18 @@ def _vector_dirs(collection_name : str) -> list:
         return []
     finally:
         con.close()
-    return [os.path.join(CHROMA_DIR, r[0]) for r in rows]
+    return [os.path.join(persist_directory, r[0]) for r in rows]
 
 
-def delete_vector_store(collection_name : str):
+def delete_vector_store(collection_name : str, persist_directory : str = CHROMA_DIR):
     # The legacy shared collection holds several meetings; deleting it for one
     # of them would wipe the others' indexes.
     if collection_name == COLLECTION_NAME:
         return
-    folders = _vector_dirs(collection_name)
+    folders = _vector_dirs(collection_name, persist_directory)
     # Chroma opens (creating if needed) before deleting, so a meeting that
     # never had an index is handled too.
-    Chroma(collection_name=collection_name, persist_directory=CHROMA_DIR).delete_collection()
+    Chroma(collection_name=collection_name, persist_directory=persist_directory).delete_collection()
     # delete_collection drops the rows from chroma.sqlite3 but leaves the
     # vector files on disk, so remove them here.
     for folder in folders:
@@ -91,12 +93,12 @@ def delete_vector_store(collection_name : str):
             open(os.path.join(folder, DELETED_MARKER), "w").close()
 
 
-def remove_deleted_dirs():
+def remove_deleted_dirs(persist_directory : str = CHROMA_DIR):
     """Finish deletes whose vector files were locked. Call before any index is opened."""
-    if not os.path.isdir(CHROMA_DIR):
+    if not os.path.isdir(persist_directory):
         return
-    for name in os.listdir(CHROMA_DIR):
-        folder = os.path.join(CHROMA_DIR, name)
+    for name in os.listdir(persist_directory):
+        folder = os.path.join(persist_directory, name)
         marker = os.path.join(folder, DELETED_MARKER)
         if os.path.isfile(marker):
             try:
@@ -108,12 +110,12 @@ def remove_deleted_dirs():
 
 
 
-def load_vector_store(collection_name : str = None) ->Chroma:
+def load_vector_store(collection_name : str = None, persist_directory : str = CHROMA_DIR) ->Chroma:
     embeddings = get_embeddings()
     vector_store = Chroma(
         collection_name=collection_name or COLLECTION_NAME,
         embedding_function= embeddings,
-        persist_directory=CHROMA_DIR
+        persist_directory=persist_directory
     )
 
     return vector_store

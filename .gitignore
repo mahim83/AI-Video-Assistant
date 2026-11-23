@@ -6,6 +6,7 @@
 *.pem
 cookies*.txt
 youtube-cookies*.txt
+.streamlit/secrets.toml
 
 # Virtual environments
 .venv/
@@ -22,7 +23,11 @@ __pycache__/
 .mypy_cache/
 .ipynb_checkpoints/
 
-# Generated data: regenerable and large.
+# App data: per-user meetings, indexes, users and audit log (see DEPLOY.md).
+data/
+backups/
+
+# Generated data from the single-user version: regenerable and large.
 # cached audio (hundreds of MB per run)
 downloads/
 # Chroma embeddings

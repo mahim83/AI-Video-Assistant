@@ -4,45 +4,31 @@ try:
 except Exception:
     pass
 
-import os
-import json
 import html
+import logging
+import os
+from datetime import datetime, timezone
+
 import streamlit as st
 
 # Import main first: it calls load_dotenv() *before* importing core/, which
 # transcriber.py depends on (it reads SARVAM_API_KEY at module import time).
-from main import (
-    run_pipeline,
-    save_result,
-    list_saved,
-    load_saved,
-    delete_saved,
-    load_rag_chain,
-    ask_question,
-)
-from utils.audio_processor import DOWNLOAD_DIR
+from main import run_pipeline, load_rag_chain, ask_question
+from core import db, guardrails, storage, ui, users
+from core.auth import require_user
 from core.retriever import reranker_error
+from core.settings import get_settings
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 st.set_page_config(
     page_title="AI Video Assistant",
-    page_icon="🎬",
+    page_icon=":material/subtitles:",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-st.markdown("""
-<style>
-  .block-container { padding-top: 2.2rem; max-width: 1100px; }
-  [data-testid="stMetricValue"] { font-size: 1.35rem; }
-  .meeting-title {
-      font-size: 1.9rem; font-weight: 700; line-height: 1.25; margin: 0 0 .15rem 0;
-  }
-  .meeting-sub { opacity: .6; font-size: .88rem; margin-bottom: 1.1rem; }
-  .empty-hero { text-align: center; padding: 3.5rem 1rem; opacity: .75; }
-  .empty-hero h2 { font-weight: 650; margin-bottom: .4rem; }
-  .st-key-youtube_url [data-testid="InputInstructions"] { display: none; }
-</style>
-""", unsafe_allow_html=True)
+ui.base_css()
 
 
 def md(text: str) -> str:
@@ -53,9 +39,19 @@ def md(text: str) -> str:
     return str(text).replace("$", r"\$")
 
 
-# State for the active meeting and its chat.
-st.session_state.setdefault("result", None)
-st.session_state.setdefault("messages", [])
+settings = get_settings()
+# Stops the script here, showing the sign-in or no-access page, unless the
+# visitor is signed in and on the invite list.
+user = require_user()
+# Every read, write and delete below goes through this user's own folder.
+space = storage.user_space(user.id)
+
+# A session that switches accounts (sign out, then in as someone else) must
+# not keep showing the previous account's meeting or chat.
+if st.session_state.get("owner") != user.id:
+    st.session_state.owner = user.id
+    st.session_state.result = None
+    st.session_state.messages = []
 
 
 def _reset_chat():
@@ -67,55 +63,183 @@ def _reset_chat():
 @st.dialog("Delete meeting?")
 def _confirm_delete(filename: str):
     name = filename[:-5]
-    st.markdown(f"`{name}` will be removed with its transcript, summary, search index "
-                "and downloaded audio. This cannot be undone.")
+    st.markdown(f"`{name}` will be removed with its transcript, summary and search index. "
+                "This cannot be undone.")
     cancel, confirm = st.columns(2)
     if cancel.button("Cancel", use_container_width=True):
         st.rerun()
     if confirm.button("Delete", type="primary", use_container_width=True):
         try:
-            delete_saved(filename)
+            storage.delete_meeting(space, filename)
         except Exception as e:
-            st.error(f"{type(e).__name__}: {e}")
+            st.error(guardrails.user_message(e))
             return
+        db.audit("meeting_deleted", user, detail=name)
         # The loaded chain would otherwise query an index that no longer exists.
         if st.session_state.result and st.session_state.result.get("collection_name") == name:
             st.session_state.result = None
             _reset_chat()
-        st.toast(f"Deleted {name}", icon="🗑️")
+        st.toast(f"Deleted {name}", icon=":material/delete:")
         st.rerun()
+
+
+def _process(url, upload, language: str):
+    status = st.status("Starting...", expanded=True)
+    try:
+        # Every check that costs nothing runs before the download starts.
+        if upload is not None:
+            input_format = guardrails.validate_upload(upload.name, upload.size)
+            ext = os.path.splitext(upload.name)[1].lower()
+            display_source = f"Uploaded file: {os.path.basename(upload.name)[:100]}"
+        else:
+            url = guardrails.validate_video_url(url)
+            input_format, display_source = None, url
+        guardrails.check_can_start_video(user)
+
+        with guardrails.job_slot(user.id), storage.job_dir(space) as work:
+            if upload is not None:
+                # A fixed name inside this job's own folder: the user's filename
+                # never becomes a path, and two uploads can't overwrite each other.
+                source = os.path.join(work, "upload" + ext)
+                with open(source, "wb") as f:
+                    f.write(upload.getbuffer())
+            else:
+                source = url
+            result = run_pipeline(
+                source, language,
+                on_step=lambda m: status.update(label=m),
+                work_dir=work,
+                persist_directory=space.vector_dir,
+                input_format=input_format,
+                max_minutes=settings.max_video_minutes,
+                before_transcribe=lambda minutes: guardrails.charge_video(user, minutes),
+            )
+
+        status.update(label="Saving...", state="running")
+        storage.save_meeting(space, result, display_source)
+        db.audit("video_processed", user,
+                 detail=f"{result['collection_name']} ({result['audio_minutes']} min, {language})")
+        status.update(label="Done", state="complete", expanded=False)
+    except Exception as e:
+        status.update(label="Failed", state="error")
+        db.audit("video_failed", user, detail=type(e).__name__)
+        st.error(guardrails.user_message(e))
+        return
+
+    st.session_state.result = result
+    _reset_chat()
+    st.toast("Meeting saved", icon=":material/check_circle:")
+    st.rerun()
+
+
+def _account_box():
+    if settings.auth_mode == "off":
+        st.caption("Sign-in is off. Local use on this computer only.")
+        return
+    st.caption(f"Signed in as {user.email}" + (" (admin)" if user.is_admin else ""))
+    if not user.is_admin:
+        u = guardrails.usage_summary(user)
+        st.caption(
+            f"Used today: {u['videos']} of {u['videos_limit']} videos, "
+            f"{u['minutes']:.0f} of {u['minutes_limit']} minutes, "
+            f"{u['questions']} of {u['questions_limit']} questions."
+        )
+    st.button("Sign out", on_click=st.logout, icon=":material/logout:", use_container_width=True)
+
+
+def _admin_page():
+    st.markdown("## Admin")
+
+    st.markdown("#### Invite a user")
+    with st.form("add_user", clear_on_submit=True):
+        c1, c2 = st.columns([3, 1])
+        email = c1.text_input("Google account email")
+        role = c2.selectbox("Role", users.ROLES)
+        if st.form_submit_button("Add user", type="primary"):
+            try:
+                users.add_user(user, email, role)
+                st.success(f"{users.normalize_email(email)} can now sign in as {role}.")
+            except (ValueError, PermissionError) as e:
+                st.error(str(e))
+
+    rows = users.list_users(user)
+    removable = [r["email"] for r in rows if r["source"] == "app" and r["email"] != user.email]
+    if removable:
+        c1, c2 = st.columns([3, 1], vertical_alignment="bottom")
+        target = c1.selectbox("Revoke access", removable)
+        if c2.button("Revoke", use_container_width=True):
+            try:
+                users.remove_user(user, target)
+                st.success(f"{target} can no longer sign in. Their meetings stay on disk.")
+                rows = users.list_users(user)
+            except (ValueError, PermissionError) as e:
+                st.error(str(e))
+
+    st.markdown("#### Users and today's usage")
+    st.caption("Limits reset at 00:00 UTC. Admins have no daily limits. "
+               "Users from ADMIN_EMAILS or ALLOWED_EMAILS are changed in .env.")
+    today = db.totals_since(guardrails.day_start())
+    st.dataframe(
+        [
+            {
+                "Email": r["email"],
+                "Role": r["role"],
+                "Added via": r["source"],
+                "Videos": int(today.get(users.user_id_for(r["email"]), {}).get("video", 0)),
+                "Audio min": round(today.get(users.user_id_for(r["email"]), {}).get("audio_minutes", 0)),
+                "Questions": int(today.get(users.user_id_for(r["email"]), {}).get("question", 0)),
+            }
+            for r in rows
+        ],
+        hide_index=True, use_container_width=True,
+    )
+
+    st.markdown("#### Audit log")
+    st.caption("Latest 200 events. Questions and transcripts are never logged.")
+    st.dataframe(
+        [
+            {
+                "Time (UTC)": datetime.fromtimestamp(r["ts"], timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+                "Email": r["email"],
+                "Action": r["action"],
+                "Detail": r["detail"],
+            }
+            for r in db.recent_audit(200)
+        ],
+        hide_index=True, use_container_width=True,
+    )
 
 
 # Sidebar controls for sources, processing, and saved meetings.
 with st.sidebar:
-    st.markdown("### 🎬 AI Video Assistant")
-    st.caption("Transcribe, summarise and interrogate any meeting or video.")
+    st.markdown(ui.BRAND, unsafe_allow_html=True)
+    _account_box()
     st.divider()
 
-    mode = st.radio("Source", ["New video", "Saved meetings"], label_visibility="collapsed")
+    modes = ["New video", "Saved meetings"] + (["Admin"] if user.is_admin else [])
+    mode = st.radio("Source", modes, label_visibility="collapsed")
 
     if mode == "New video":
         kind = st.segmented_control("Input", ["YouTube URL", "Upload file"], default="YouTube URL")
 
-        source = None
+        url = upload = None
         if kind == "YouTube URL":
-            url = st.text_input("YouTube URL", placeholder="https://www.youtube.com/watch?v=...", key="youtube_url")
-            source = url.strip() or None
+            url = st.text_input("YouTube URL", placeholder="https://www.youtube.com/watch?v=...",
+                                key="youtube_url", max_chars=300)
+            ready = bool(url.strip())
         else:
-            upload = st.file_uploader("Audio or video file", type=["mp3", "wav", "m4a", "mp4", "mkv", "webm", "aac"])
-            if upload is not None:
-                os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-                # basename strips any directory components (e.g. "../../x.mp4")
-                # a crafted filename could carry, so the write can't escape DOWNLOAD_DIR.
-                source = os.path.join(DOWNLOAD_DIR, os.path.basename(upload.name))
-                with open(source, "wb") as f:
-                    f.write(upload.getbuffer())
+            upload = st.file_uploader("Audio or video file", type=list(guardrails.UPLOAD_FORMATS))
+            ready = upload is not None
+        st.caption(f"Up to {settings.max_video_minutes} minutes"
+                   + (f" and {settings.max_upload_mb} MB." if kind != "YouTube URL" else "."))
 
         ENGINES = {
-            "english":  ("English — Deepgram",      "☁️ Cloud, fast. Uses your Deepgram quota."),
-            "hinglish": ("Hinglish — Sarvam",       "☁️ Cloud. Translates Hindi-English to English."),
-            "whisper":  ("English — Whisper (local)", "⏱️ Runs on your CPU. Slow and warms the laptop, but free and offline."),
+            "english":  ("English (Deepgram)",        "Cloud transcription. The fastest option."),
+            "hinglish": ("Hinglish (Sarvam)",         "Cloud. Turns Hindi-English speech into an English transcript."),
+            "whisper":  ("English (Whisper, local)",  "Runs on the server's CPU. Slow, with no cloud service."),
         }
+        if not settings.enable_whisper:
+            del ENGINES["whisper"]
         language = st.selectbox(
             "Engine",
             list(ENGINES),
@@ -123,38 +247,33 @@ with st.sidebar:
         )
         st.caption(ENGINES[language][1])
 
-        go = st.button("Process video", type="primary", use_container_width=True, disabled=not source)
+        if st.button("Process video", type="primary", use_container_width=True, disabled=not ready):
+            _process(url, upload, language)
 
-        if go and source:
-            status = st.status("Starting...", expanded=True)
-            try:
-                result = run_pipeline(source, language, on_step=lambda m: status.update(label=m))
-                status.update(label="Saving...", state="running")
-                path = save_result(result, source)
-                status.update(label="Done", state="complete", expanded=False)
-                st.session_state.result = result
-                _reset_chat()
-                st.toast(f"Saved to {path}", icon="💾")
-                st.rerun()
-            except Exception as e:
-                status.update(label="Failed", state="error")
-                st.error(f"{type(e).__name__}: {e}")
-
-    else:
-        saved = list_saved()
+    elif mode == "Saved meetings":
+        saved = storage.list_meetings(space)
         if not saved:
             st.info("No saved meetings yet. Process a video first.")
         else:
             pick = st.selectbox("Meeting", saved, format_func=lambda f: f[:-5])
-            if st.button("Load meeting", type="primary", use_container_width=True):
-                with st.spinner("Reopening saved index..."):
-                    r = load_saved(pick)
-                    r["rag_chain"] = load_rag_chain(r["collection_name"], r["transcript"])
+            if st.button("Open meeting", type="primary", use_container_width=True):
+                try:
+                    with st.spinner("Opening meeting..."):
+                        r = storage.load_meeting(space, pick)
+                        r["rag_chain"] = load_rag_chain(r["collection_name"], r["transcript"],
+                                                        persist_directory=space.vector_dir)
+                except Exception as e:
+                    st.error(guardrails.user_message(e))
+                else:
                     st.session_state.result = r
                     _reset_chat()
-                st.rerun()
+                    db.audit("meeting_opened", user, detail=pick[:-5])
+                    st.rerun()
             if st.button("Delete meeting", use_container_width=True):
                 _confirm_delete(pick)
+
+    else:
+        st.caption("Invite users, revoke access, and review usage and the audit log.")
 
     if st.session_state.result:
         st.divider()
@@ -164,68 +283,93 @@ with st.sidebar:
             st.rerun()
 
 
+if mode == "Admin":
+    # Offered only to admins above; users.* checks the role again.
+    _admin_page()
+    st.stop()
+
+
 # Main panel for the loaded meeting, transcript, summary, and chat.
 result = st.session_state.result
 
 if result is None:
-    st.markdown("""
-      <div class="empty-hero">
-                <h2>🎬 Nothing loaded yet</h2>
-                <p>Paste a YouTube link in the sidebar, or reopen a saved meeting.</p>
-      </div>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        '<div class="ava-empty"><h2>Open a video to get started</h2>'
+        "<p>Paste a YouTube link or upload a recording in the sidebar, "
+        "or open one of your saved meetings.</p></div>",
+        unsafe_allow_html=True,
+    )
     st.stop()
+
+
+def _saved_label(saved_at) -> str:
+    if not saved_at:
+        return "Saved just now"
+    try:
+        return "Saved " + datetime.fromisoformat(saved_at).strftime("%d %b %Y, %H:%M")
+    except ValueError:
+        return f"Saved {saved_at}"
 
 
 # The title comes from the LLM and the source is user-supplied (both are
 # persisted and re-rendered on every reload), so escape before building HTML.
-st.markdown(f'<div class="meeting-title">{html.escape(result["title"])}</div>', unsafe_allow_html=True)
-meta = result.get("saved_at", "just now")
-source = html.escape(result.get("source", ""))
-st.markdown(f'<div class="meeting-sub">{source} · {meta}</div>', unsafe_allow_html=True)
+st.markdown(f'<h1 class="ava-title">{html.escape(result["title"])}</h1>', unsafe_allow_html=True)
+source = result.get("source", "")
+if source.startswith(("http://", "https://")):
+    source_html = f'From <a href="{html.escape(source)}" target="_blank" rel="noopener">{html.escape(source)}</a>'
+else:
+    source_html = html.escape(source)
+st.markdown(
+    f'<p class="ava-meta">{source_html}<br>{html.escape(_saved_label(result.get("saved_at")))}</p>',
+    unsafe_allow_html=True,
+)
 
 transcript = result["transcript"]
 c1, c2, c3 = st.columns(3)
 c1.metric("Words", f"{len(transcript.split()):,}")
 c2.metric("Characters", f"{len(transcript):,}")
-c3.metric("Est. read time", f"{max(1, len(transcript.split()) // 200)} min")
+c3.metric("Reading time", f"{max(1, len(transcript.split()) // 200)} min")
 
-tabs = st.tabs(["📋 Summary", "📝 Transcript"])
+tabs = st.tabs(["Summary", "Transcript"])
 
 with tabs[0]:
-    st.markdown(md(result["summary"]))
+    with st.container(key="reading_summary"):
+        st.markdown(md(result["summary"]))
 with tabs[1]:
-    st.download_button("Download transcript (.txt)", transcript,
-                       file_name=f"{result['collection_name']}.txt", mime="text/plain")
-    st.text_area("Full transcript", transcript, height=420, label_visibility="collapsed")
+    with st.container(key="reading_transcript"):
+        st.download_button("Download transcript", transcript, icon=":material/download:",
+                           file_name=f"{result['collection_name']}.txt", mime="text/plain")
+        st.text_area("Full transcript", transcript, height=420, label_visibility="collapsed")
 
 st.divider()
-st.markdown("### 💬 Chat with this meeting")
+st.markdown("### Ask about this meeting")
 if err := reranker_error():
+    # The load error can include server paths, so only admins see it.
+    detail = f" ({md(err)})" if user.is_admin else ""
     st.warning("Reranker unavailable, so answers use hybrid search ranking only. "
-               f"It retries when you next load or process a meeting. ({md(err)})")
+               f"It retries when you next load or process a meeting.{detail}")
 else:
-    st.caption("Retrieval: vector + BM25 hybrid search, reranked by a cross-encoder. "
-               "Follow-up questions use the last 3 exchanges.")
+    st.caption("Answers come only from this video. Follow-up questions use the last 3 exchanges.")
 
 for m in st.session_state.messages:
-    with st.chat_message(m["role"], avatar="🤖" if m["role"] == "assistant" else None):
+    with st.chat_message(m["role"]):
         st.markdown(md(m["content"]))
 
-if q := st.chat_input("Ask anything about this meeting..."):
+if q := st.chat_input("Ask a question about this meeting", max_chars=settings.max_question_chars):
     # Failed turns stay on screen but aren't sent back: an error text would
     # read to the model as something it said, and the question got no answer.
     history = [m for m in st.session_state.messages if not m.get("failed")]
     st.session_state.messages.append({"role": "user", "content": q})
     with st.chat_message("user"):
         st.markdown(md(q))
-    with st.chat_message("assistant", avatar="🤖"):
+    with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             failed = False
             try:
-                a = ask_question(result["rag_chain"], q, history)
+                question = guardrails.check_question(user, q)
+                a = guardrails.clean_answer(ask_question(result["rag_chain"], question, history))
             except Exception as e:
-                a, failed = f"⚠️ {type(e).__name__}: {e}", True
+                a, failed = f"No answer: {guardrails.user_message(e)}", True
         st.markdown(md(a))
     if failed:
         st.session_state.messages[-1]["failed"] = True

@@ -1,16 +1,26 @@
+import os
+import shutil
+import subprocess
+import wave
+
 import yt_dlp
 from pydub import AudioSegment
-import os
 
-DOWNLOAD_DIR = 'downloads'
-os.makedirs(DOWNLOAD_DIR,exist_ok = True)
+from core.errors import GuardrailError, UserFacingError
 
-def download_youtube_audio(url :str) ->str:
-    output_path = os.path.join(DOWNLOAD_DIR, "%(title)s.%(ext)s")
-    ydl_opts = {
+
+class MediaError(UserFacingError):
+    """The input couldn't be read as audio. The message is safe to show."""
+
+
+def _ydl_opts(out_dir: str = None) -> dict:
+    opts = {
         "format": "bestaudio/best",
-        "outtmpl": output_path,
         "noplaylist": True,
+        # Only YouTube's single-video extractor is loaded. yt-dlp would
+        # otherwise accept thousands of sites, and its generic extractor will
+        # fetch any URL, including internal addresses on the server's network.
+        "allowed_extractors": ["youtube"],
         # The "web"/"tv"/"ios"/"mweb" clients now gate their media URLs behind a
         # GVS PO token; without one YouTube serves the manifest but 403s the
         # actual bytes. "android" and "tv_simply" still hand out playable URLs.
@@ -26,52 +36,96 @@ def download_youtube_audio(url :str) ->str:
         "http_headers": {
             "Accept-Language": "en-US,en;q=0.9",
         },
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "wav",
-                "preferredquality": "192",
-            }
-        ],
         "quiet": True,
         "no_warnings": True,
     }
+    if out_dir:
+        # The video id, not its title: titles can be long or contain characters
+        # that are awkward in paths.
+        opts["outtmpl"] = os.path.join(out_dir, "%(id)s.%(ext)s")
+
     cookie_file = os.getenv("YTDLP_COOKIES", "").strip()
     browser = os.getenv("YTDLP_BROWSER", "").strip().lower()
     if cookie_file:
         cookie_file = os.path.expanduser(cookie_file)
         if not os.path.isfile(cookie_file):
             raise FileNotFoundError("YTDLP_COOKIES does not point to an existing cookie file")
-        ydl_opts["cookiefile"] = cookie_file
+        opts["cookiefile"] = cookie_file
     elif browser:
-        ydl_opts["cookiesfrombrowser"] = (browser,)
+        opts["cookiesfrombrowser"] = (browser,)
+    return opts
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+
+def youtube_minutes(url: str) -> float:
+    """Length of a YouTube video in minutes, read before anything is downloaded."""
+    with yt_dlp.YoutubeDL(_ydl_opts()) as ydl:
+        info = ydl.extract_info(url, download=False)
+    if info.get("is_live") or info.get("live_status") in ("is_live", "is_upcoming"):
+        raise GuardrailError("Live streams and premieres can't be processed. Try again after it ends.")
+    duration = info.get("duration")
+    if not duration:
+        raise GuardrailError("YouTube didn't report this video's length, so it can't be processed.")
+    return duration / 60
+
+
+def download_youtube_audio(url: str, out_dir: str) -> str:
+    """Download the best audio stream as is; convert_to_wav() normalises it after."""
+    with yt_dlp.YoutubeDL(_ydl_opts(out_dir)) as ydl:
         info = ydl.extract_info(url, download=True)
 
-        # FFmpegExtractAudio records the real post-conversion path here.
-        # prepare_filename() still reports the pre-postprocessor extension.
         for download in info.get("requested_downloads") or []:
             if download.get("filepath"):
                 return download["filepath"]
-
-        return os.path.splitext(ydl.prepare_filename(info))[0] + ".wav"
-
+        return ydl.prepare_filename(info)
 
 
-def convert_to_wav(input_path: str) -> str:
-    """Convert any audio/video file to WAV format using pydub."""
-    output_path = os.path.splitext(input_path)[0] + "_converted.wav"
-    audio = AudioSegment.from_file(input_path)
-    audio = audio.set_channels(1).set_frame_rate(16000)
-    audio.export(output_path, format="wav")
+def convert_to_wav(input_path: str, out_dir: str = None, input_format: str = None,
+                   max_minutes: float = None) -> str:
+    """
+    Decode any audio/video file to 16 kHz mono WAV, the format every engine
+    takes, about 1.9 MB per minute.
+
+    input_format forces FFmpeg's demuxer (set for uploads, from the extension),
+    and only plain file access is allowed, so a crafted file can't make FFmpeg
+    read other files or URLs. max_minutes stops decoding just past the limit,
+    so an over-long file is rejected without decoding all of it.
+    """
+    out_dir = out_dir or os.path.dirname(os.path.abspath(input_path))
+    output_path = os.path.join(out_dir, "audio.wav")
+    if os.path.abspath(output_path) == os.path.abspath(input_path):
+        output_path = os.path.join(out_dir, "audio_converted.wav")
+
+    cmd = [shutil.which("ffmpeg") or "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
+           "-y", "-protocol_whitelist", "file"]
+    if input_format:
+        cmd += ["-f", input_format]
+    cmd += ["-i", input_path, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le"]
+    if max_minutes:
+        cmd += ["-t", str(int(max_minutes * 60) + 1)]
+    cmd.append(output_path)
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+    except subprocess.TimeoutExpired:
+        raise MediaError("Converting the audio took too long. Try a shorter or smaller file.")
+    if result.returncode != 0 or not os.path.isfile(output_path):
+        print(f"ffmpeg failed ({result.returncode}): {result.stderr.strip()[-500:]}")
+        raise MediaError("This file couldn't be read as audio. Check that it's a valid audio or video file.")
+
+    if max_minutes and wav_minutes(output_path) > max_minutes:
+        raise GuardrailError(f"Recordings can be at most {max_minutes:g} minutes long.")
     return output_path
+
+
+def wav_minutes(path: str) -> float:
+    with wave.open(path, "rb") as w:
+        return w.getnframes() / w.getframerate() / 60
 
 
 
 def chunk_audio(wav_path : str , chunk_minutes : int = 10) -> list:
     audio = AudioSegment.from_wav(wav_path)
-    chunk_ms = chunk_minutes * 60 * 1000 
+    chunk_ms = chunk_minutes * 60 * 1000
 
     chunks = []
 
@@ -81,27 +135,36 @@ def chunk_audio(wav_path : str , chunk_minutes : int = 10) -> list:
         chunk.export(chunk_path , format = "wav")
 
         chunks.append(chunk_path)
-    
-    return chunks 
+
+    return chunks
 
 
-def in_download_dir(path: str) -> bool:
+def is_url(source: str) -> bool:
+    return source.startswith("http://") or source.startswith("https://")
+
+
+def process_input(source: str, work_dir: str, input_format: str = None,
+                  max_minutes: float = None) -> tuple:
     """
-    True for paths inside DOWNLOAD_DIR. Only files there belong to the app; a
-    local file passed to the CLI lives elsewhere and must never be deleted.
+    Return (wav_path, chunks): the full WAV and the chunk files cut from it,
+    all written in work_dir. The caller deletes work_dir when done.
+
+    max_minutes is checked before a YouTube download and again on the
+    decoded audio, so a mislabelled length can't slip through.
     """
-    root = os.path.normcase(os.path.abspath(DOWNLOAD_DIR))
-    return os.path.normcase(os.path.abspath(path)).startswith(root + os.sep)
-
-
-def process_input(source: str) -> tuple:
-    """Return (wav_path, chunks): the full WAV and the chunk files cut from it."""
-    if source.startswith("http://") or source.startswith("https://"):
+    if is_url(source):
+        if max_minutes:
+            minutes = youtube_minutes(source)
+            if minutes > max_minutes:
+                raise GuardrailError(
+                    f"This video is {minutes:.0f} minutes long; the limit is {max_minutes:g} minutes."
+                )
         print("Detected YouTube URL. Downloading audio...")
-        wav_path = download_youtube_audio(source)
+        source = download_youtube_audio(source, work_dir)
     else:
         print("Detected local file. Converting to WAV...")
-        wav_path = convert_to_wav(source)
+
+    wav_path = convert_to_wav(source, work_dir, input_format=input_format, max_minutes=max_minutes)
 
     print("Chunking audio...")
     chunks = chunk_audio(wav_path)

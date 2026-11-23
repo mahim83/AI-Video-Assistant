@@ -3,16 +3,11 @@
 
 # Audio and video acquisition
 yt-dlp>=2024.4.9                  # Download audio from YouTube URLs
-pydub>=0.25.1                     # Audio file manipulation / format conversion
-ffmpeg-python>=0.2.0              # FFmpeg bindings (FFmpeg binary must be installed separately)
+pydub>=0.25.1                     # Audio chunking (FFmpeg binary must be installed separately)
 
 # Speech-to-text
 openai-whisper>=20231117          # OpenAI Whisper (runs locally)
 torch>=2.2.0                      # PyTorch backend for Whisper
-torchaudio>=2.2.0                 # Audio utilities for PyTorch
-
-# Translation
-deep-translator>=1.11.4           # Lightweight translation wrapper (Google backend)
 
 # LLM orchestration
 langchain>=0.2.0
@@ -31,13 +26,8 @@ huggingface-hub>=0.23.0           # Model downloading from HuggingFace Hub
 tiktoken>=0.7.0                   # Token counting for text splitting
 
 # Streamlit UI
-streamlit>=1.35.0
-streamlit-extras>=0.4.0           # Additional Streamlit widgets / utilities
+streamlit[auth]>=1.42.0           # 1.42+ for st.login; [auth] adds Authlib for Google sign-in
 watchdog>=4.0.0                   # File-change watcher (improves Streamlit hot-reload)
-
-# PDF and text export
-reportlab>=4.2.0                  # PDF generation
-fpdf2>=2.7.9                      # Lightweight alternative PDF library
 
 # Utilities
 python-dotenv>=1.0.0              # Load API keys from .env
