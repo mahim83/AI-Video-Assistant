@@ -55,14 +55,14 @@ def send(to, subject: str, body: str):
     threading.Thread(target=_send, args=(recipients, subject, body), daemon=True).start()
 
 
-def new_access_request(email: str):
+def new_access_request(email: str, name: str = None, reason: str = None):
     s = get_settings()
-    send(
-        sorted(s.notify_emails),
-        f"Access request: {email}",
-        f"{email} signed in with Google and asked to use AI Video Assistant.\n\n"
-        f"Approve or reject it on the Admin page: {s.app_url}\n",
-    )
+    who = f"{name} ({email})" if name else email
+    lines = [f"{who} registered for AI Video Assistant with their Google account."]
+    if reason:
+        lines.append(f"How they'll use it: {reason}")
+    lines.append(f"Approve or reject it on the Admin page: {s.app_url}")
+    send(sorted(s.notify_emails), f"New registration: {email}", "\n\n".join(lines) + "\n")
 
 
 def access_approved(email: str):

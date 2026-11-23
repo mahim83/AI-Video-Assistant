@@ -15,7 +15,7 @@ import streamlit as st
 # transcriber.py depends on (it reads SARVAM_API_KEY at module import time).
 from main import run_pipeline, load_rag_chain, ask_question
 from core import db, guardrails, storage, ui, users
-from core.auth import require_user
+from core.auth import require_user, sign_out_href
 from core.retriever import reranker_error
 from core.settings import get_settings
 
@@ -150,7 +150,13 @@ def _account_box():
             f"{u['minutes']:.0f} of {u['minutes_limit']} minutes, "
             f"{u['questions']} of {u['questions_limit']} questions."
         )
-    st.button("Sign out", on_click=st.logout, icon=":material/logout:", use_container_width=True)
+    if href := sign_out_href():
+        # Email accounts: this route deletes the session and clears its cookie.
+        # A same-tab link (st.link_button would open a new tab).
+        st.markdown(f'<a class="ava-button-link ava-block" href="{href}" target="_self">Sign out</a>',
+                    unsafe_allow_html=True)
+    else:
+        st.button("Sign out", on_click=st.logout, icon=":material/logout:", use_container_width=True)
 
 
 def _admin_page():
@@ -315,6 +321,8 @@ with st.sidebar:
             st.session_state.result = None
             _reset_chat()
             st.rerun()
+
+    st.markdown(ui.credit_line(), unsafe_allow_html=True)
 
 
 if mode == "Admin":

@@ -89,6 +89,23 @@ BASE_CSS = """
 button { transition: background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out; }
 
 .st-key-youtube_url [data-testid="InputInstructions"] { display: none; }
+
+/* Credit: end of the front page and bottom of the sidebar. */
+.ava-footer a, .ava-credit a { color: var(--ava-muted); text-decoration: underline; text-underline-offset: 3px; }
+.ava-footer a:hover, .ava-credit a:hover { color: var(--ava-accent); }
+.ava-gh { display: inline-flex; align-items: center; gap: .35rem; }
+.ava-footer .ava-gh, .ava-credit .ava-gh { text-decoration: none; }
+.ava-gh span { text-decoration: underline; text-underline-offset: 3px; }
+.ava-credit { font-size: .8125rem; line-height: 1.7; color: var(--ava-faint); margin: 1.5rem 0 0 0; }
+
+/* Same-tab link styled as a secondary button (sign-out for email accounts). */
+.ava-button-link { display: inline-block; padding: .55rem 1rem; border: 1px solid var(--ava-rule);
+                   border-radius: .375rem; background: var(--ava-raised); color: var(--ava-ink) !important;
+                   text-decoration: none !important; font-size: .875rem;
+                   transition: border-color 150ms ease-out, color 150ms ease-out; }
+.ava-button-link.ava-block { display: block; text-align: center; }
+.ava-button-link:hover { border-color: var(--ava-accent); color: var(--ava-accent) !important; }
+.ava-button-link:focus-visible { outline: 2px solid var(--ava-accent); outline-offset: 2px; }
 </style>
 """
 
@@ -104,20 +121,42 @@ SIGNED_OUT_CSS = """
             margin: 0 0 2rem 0; max-width: 34rem; }
 .ava-note { font-size: .875rem; line-height: 1.5; color: var(--ava-muted);
             margin: 1.25rem 0 0 0; max-width: 30rem; }
+.ava-note a { color: var(--ava-accent); font-weight: 600; text-decoration: underline;
+              text-underline-offset: 3px; }
+.ava-note a:hover { color: var(--ava-accent-strong); }
+.ava-note a:focus-visible { outline: 2px solid var(--ava-accent); outline-offset: 2px; border-radius: 2px; }
+.st-key-signedout [data-testid="stForm"], .st-key-signin_box [data-testid="stForm"] { margin-top: .5rem; max-width: 26rem; }
+
+/* Sign in | Sign up: two links styled as tabs. */
+.ava-authtabs { display: flex; gap: 1.75rem; border-bottom: 1px solid var(--ava-rule);
+                margin: 0 0 1.25rem 0; max-width: 26rem; }
+.ava-authtabs a { padding: .55rem 0; margin-bottom: -1px; font-size: 1rem; font-weight: 600;
+                  color: var(--ava-muted); text-decoration: none; border-bottom: 2px solid transparent;
+                  transition: color 150ms ease-out, border-color 150ms ease-out; }
+.ava-authtabs a:hover { color: var(--ava-ink); }
+.ava-authtabs a.ava-on { color: var(--ava-accent); border-bottom-color: var(--ava-accent); }
+.ava-authtabs a:focus-visible { outline: 2px solid var(--ava-accent); outline-offset: 3px; border-radius: 2px; }
+
+/* "or sign in with email": a quiet rule with the words in the middle. */
+.ava-or { display: flex; align-items: center; gap: .75rem; margin: 1.5rem 0 .25rem 0; max-width: 26rem;
+          color: var(--ava-faint); font-size: .8125rem; }
+.ava-or::before, .ava-or::after { content: ""; flex: 1; height: 1px; background: var(--ava-rule); }
+
+.st-key-signedout .ava-button-link { margin-top: .75rem; }
 
 /* Primary actions on the signed-out pages. */
-:is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-request_access, .st-key-request_check) button {
+:is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-request_access, .st-key-request_check, .st-key-register_submit, .st-key-login_submit, .st-key-er_submit, .st-key-verify_submit, .st-key-reset_submit, .st-key-reset_start_submit) button {
   width: auto; min-width: 16rem; min-height: 3rem; padding: 0 1.25rem;
   background: var(--ava-accent); border-color: var(--ava-accent); color: #fff;
 }
 :is(.st-key-google_signin, .st-key-google_register) button { padding-left: .75rem; }
-:is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-request_access, .st-key-request_check) button:hover {
+:is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-request_access, .st-key-request_check, .st-key-register_submit, .st-key-login_submit, .st-key-er_submit, .st-key-verify_submit, .st-key-reset_submit, .st-key-reset_start_submit) button:hover {
   background: var(--ava-accent-strong); border-color: var(--ava-accent-strong); color: #fff;
 }
-:is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-request_access, .st-key-request_check) button:focus-visible {
+:is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-request_access, .st-key-request_check, .st-key-register_submit, .st-key-login_submit, .st-key-er_submit, .st-key-verify_submit, .st-key-reset_submit, .st-key-reset_start_submit) button:focus-visible {
   outline: 2px solid var(--ava-accent); outline-offset: 3px;
 }
-:is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-request_access, .st-key-request_check) button p {
+:is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-request_access, .st-key-request_check, .st-key-register_submit, .st-key-login_submit, .st-key-er_submit, .st-key-verify_submit, .st-key-reset_submit, .st-key-reset_start_submit) button p {
   font-size: 1rem; font-weight: 600;
 }
 
@@ -197,9 +236,9 @@ SIGNED_OUT_CSS = """
 .ava-wave.ava-played { animation: ava-progress 1100ms ease-out both; }
 .ava-head { animation: ava-playhead 1100ms ease-out both; }
 .ava-follow { animation: ava-rise 240ms ease-out 250ms both; }
-.st-key-signin_tabs { animation: ava-rise 240ms ease-out 400ms both; }
+.st-key-signin_box { animation: ava-rise 240ms ease-out 400ms both; }
 @media (prefers-reduced-motion: reduce) {
-  .ava-caption .ava-w, .ava-wave.ava-played, .ava-head, .ava-follow, .st-key-signin_tabs { animation: none; }
+  .ava-caption .ava-w, .ava-wave.ava-played, .ava-head, .ava-follow, .st-key-signin_box { animation: none; }
 }
 
 @media (max-width: 640px) {
@@ -289,6 +328,30 @@ def _player() -> str:
     )
 
 
+# Who made the app, shown at the end of the front page and in the sidebar.
+AUTHOR_NAME = "Mahim Katiyar"
+AUTHOR_URL = "https://github.com/mahim83"
+CREDIT = f'<a href="{AUTHOR_URL}" target="_blank" rel="noopener noreferrer">{AUTHOR_NAME}</a>'
+
+_GITHUB_MARK = ('<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="currentColor">'
+                '<path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49'
+                '-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82'
+                '.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15'
+                '-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 '
+                '2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73'
+                '.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>')
+
+
+def _github_link() -> str:
+    return (f'<a class="ava-gh" href="{AUTHOR_URL}" target="_blank" rel="noopener noreferrer">'
+            f'{_GITHUB_MARK}<span>github.com/mahim83</span></a>')
+
+
+def credit_line() -> str:
+    """For the signed-in sidebar."""
+    return f'<p class="ava-credit">Made by {CREDIT}<br>{_github_link()}</p>'
+
+
 def _landing_sections(settings) -> str:
     formats = "mp3, mp4, m4a, wav, webm, mkv or aac"
     steps = [
@@ -325,7 +388,7 @@ def _landing_sections(settings) -> str:
          "soon as the transcript is ready. Summaries and answers are written by OpenAI."),
         ("Can I use YouTube links?", youtube),
         ("How do I get access?",
-         "Open the Register tab above, continue with Google and request access. The admin approves new accounts."
+         "Use Sign up at the top of this page, with Google or your email. The admin approves new accounts."
          if settings.signup_mode == "request" else
          "Ask the person who runs this app to add your Google account, then sign in."),
     ]
@@ -336,15 +399,167 @@ def _landing_sections(settings) -> str:
         f'<section class="ava-section"><h2>How it works</h2><div class="ava-grid">{step_html}</div></section>'
         f'<section class="ava-section"><h2>Good for</h2><div class="ava-grid ava-two">{use_html}</div></section>'
         f'<section class="ava-section"><h2>Good to know</h2><div class="ava-grid ava-two">{faq_html}</div></section>'
-        '<footer class="ava-footer"><p>AI Video Assistant</p>'
-        "<p>Invite only. Recordings and chats are private to each account.</p></footer>"
+        f'<footer class="ava-footer"><p>AI Video Assistant, made by {CREDIT}</p>'
+        f'<p>{_github_link()}</p></footer>'
     )
 
 
-def sign_in_page():
+# Signed-out pages have their own addresses, so they can be linked and shared.
+REGISTER_HREF = "?page=register"
+RESET_HREF = "?page=reset"
+HOME_HREF = "?"
+
+
+def _link(href: str, text: str) -> str:
+    return f'<a href="{href}" target="_self">{text}</a>'
+
+
+def _or(text: str):
+    st.markdown(f'<div class="ava-or"><span>{text}</span></div>', unsafe_allow_html=True)
+
+
+def _go_to(url: str):
+    """Send the browser to url (the cookie-setting route), with a link if it doesn't move."""
+    safe = html.escape(url)
+    st.markdown(f'<meta http-equiv="refresh" content="0; url={safe}">'
+                f'<p class="ava-note">Signing you in. If nothing happens, '
+                f'<a href="{safe}" target="_self">continue</a>.</p>', unsafe_allow_html=True)
+    st.stop()
+
+
+def _complete_sign_in(token: str):
+    _go_to(f"/local-auth/complete?token={token}")
+
+
+def _signout_control(signout_href, key: str, label: str = "Use a different account"):
+    """Google accounts sign out through st.logout; email accounts through a route that clears the cookie."""
+    if signout_href:
+        st.markdown(f'<a class="ava-button-link" href="{signout_href}" target="_self">{label}</a>',
+                    unsafe_allow_html=True)
+    else:
+        st.button(label, key=key, on_click=st.logout)
+
+
+def _email_sign_in_form():
+    from core import local_auth
+    with st.form("login_form", border=False):
+        email = st.text_input("Email", key="login_email", max_chars=254, autocomplete="email")
+        password = st.text_input("Password", type="password", key="login_password", max_chars=128,
+                                 autocomplete="current-password")
+        submitted = st.form_submit_button("Sign in", key="login_submit", type="primary")
+    if submitted:
+        try:
+            _complete_sign_in(local_auth.sign_in(email, password))
+        except local_auth.AuthError as e:
+            st.error(str(e))
+    _note(_link(RESET_HREF, "Forgot your password?"))
+
+
+def _auth_tabs(active: str):
+    """Sign in | Sign up. Links, not st.tabs, so each has its own address and
+    the "Don't have an account? Sign up" line can switch to the other."""
+    def tab(key, label, href):
+        on = key == active
+        current = ' aria-current="page"' if on else ""
+        return f'<a class="{"ava-on" if on else ""}" href="{href}" target="_self"{current}>{label}</a>'
+    st.markdown(f'<nav class="ava-authtabs" aria-label="Account">{tab("signin", "Sign in", HOME_HREF)}'
+                f'{tab("signup", "Sign up", REGISTER_HREF)}</nav>', unsafe_allow_html=True)
+
+
+def _signin_panel(settings, email_ok: bool):
+    st.button("Sign in with Google", key="google_signin", on_click=st.login)
+    # Email accounts need email (codes for sign-up and resets), so without
+    # SMTP settings only Google is offered.
+    if email_ok:
+        _or("or sign in with email")
+        _email_sign_in_form()
+    if settings.signup_mode == "request":
+        _note(f"Don't have an account? {_link(REGISTER_HREF, 'Sign up')}")
+    else:
+        _note("Accounts are by invitation.")
+
+
+def _signup_panel(settings, email_ok: bool):
+    from core import local_auth
+    from core.users import NAME_MAX, REASON_MAX
+    if settings.signup_mode != "request":
+        st.markdown('<p class="ava-tab-lede">Accounts are by invitation. Ask the person who runs '
+                    "this app to add your account, then sign in.</p>", unsafe_allow_html=True)
+        _note(f"Already registered? {_link(HOME_HREF, 'Sign in')}")
+        return
+
+    # Step two of the email path: the code that proves the address is theirs.
+    if pending := st.session_state.get("_verify_email"):
+        who = html.escape(pending, quote=False)
+        st.markdown(f'<p class="ava-tab-lede"><strong>Check your email.</strong> We sent a 6-digit code '
+                    f"to {who}. Enter it to finish creating your account. It expires in 15 minutes.</p>",
+                    unsafe_allow_html=True)
+        with st.form("verify_form", border=False):
+            code = st.text_input("6-digit code", key="verify_code", max_chars=6)
+            verified = st.form_submit_button("Verify email", key="verify_submit", type="primary")
+        if verified:
+            try:
+                token = local_auth.finish_registration(pending, code)
+                st.session_state.pop("_verify_email", None)
+                _complete_sign_in(token)
+            except local_auth.AuthError as e:
+                st.error(str(e))
+        c1, c2 = st.columns(2)
+        if c1.button("Send a new code", key="verify_resend"):
+            try:
+                local_auth._send_code(pending, "register")
+                st.success("A new code is on its way.")
+            except local_auth.AuthError as e:
+                st.error(str(e))
+        if c2.button("Use a different email", key="verify_restart"):
+            st.session_state.pop("_verify_email", None)
+            st.rerun()
+        return
+
+    last = ("You'll get an email as soon as you're approved."
+            if email_ok else "Sign in again once you're approved.")
+    st.markdown(f'<p class="ava-tab-lede">New accounts are approved by the admin before they can be '
+                f"used. {last}</p>", unsafe_allow_html=True)
+    st.button("Sign up with Google", key="google_register", on_click=st.login)
+
+    if email_ok:
+        _or("or sign up with email")
+        with st.form("email_register_form", border=False):
+            name = st.text_input("Full name", key="er_name", max_chars=NAME_MAX, autocomplete="name")
+            email = st.text_input("Email", key="er_email", max_chars=254, autocomplete="email")
+            password = st.text_input("Password", type="password", key="er_password", max_chars=128,
+                                     autocomplete="new-password",
+                                     help=f"At least {local_auth.PASSWORD_MIN} characters. "
+                                          "A short phrase of several words works well.")
+            confirm = st.text_input("Confirm password", type="password", key="er_confirm", max_chars=128,
+                                    autocomplete="new-password")
+            reason = st.text_area("How will you use AI Video Assistant? (optional)", key="er_reason",
+                                  max_chars=REASON_MAX, height=90,
+                                  placeholder="For example: summarising my college lectures")
+            agree = st.checkbox("I understand that my recordings are transcribed by Deepgram or Sarvam "
+                                "and summarised by OpenAI.", key="er_agree")
+            created = st.form_submit_button("Create account", key="er_submit", type="primary")
+        if created:
+            if password != confirm:
+                st.error("The two passwords don't match.")
+            elif not agree:
+                st.error("Tick the box to confirm you understand how recordings are processed.")
+            else:
+                try:
+                    st.session_state["_verify_email"] = local_auth.start_registration(
+                        name, email, password, reason)
+                    st.rerun()
+                except local_auth.AuthError as e:
+                    st.error(str(e))
+    _note(f"Already registered? {_link(HOME_HREF, 'Sign in')}")
+
+
+def sign_in_page(active: str = "signin"):
+    """The front page: what the app does, and the Sign in | Sign up box."""
     from core import notify
     from core.settings import get_settings
     settings = get_settings()
+    email_ok = notify.enabled()
     how = ("Paste a YouTube link or upload a recording." if settings.enable_youtube
            else "Upload a recording of a meeting, lecture or video.")
     st.markdown(SIGNED_OUT_CSS, unsafe_allow_html=True)
@@ -355,61 +570,116 @@ def sign_in_page():
         _header("Ask questions about any video or meeting recording.",
                 f"{how} You get the full transcript, a short summary, "
                 "and answers drawn from what was actually said.", caption=False, follow=True)
-
-        with st.container(key="signin_tabs"):
-            sign_in, register = st.tabs(["Sign in", "Register"])
-            with sign_in:
-                st.markdown('<p class="ava-tab-lede">Already approved? Sign in with the Google '
-                            "account you registered with.</p>", unsafe_allow_html=True)
-                st.button("Continue with Google", key="google_signin", on_click=st.login)
-                _note("Your meetings are private: other users can't see them.")
-            with register:
-                if settings.signup_mode == "request":
-                    last = ("You'll get an email when you're approved, then sign in."
-                            if notify.enabled() else "Once you're approved, sign in.")
-                    st.markdown(
-                        '<ol class="ava-steps">'
-                        "<li>Continue with the Google account you want to use.</li>"
-                        "<li>Click <strong>Request access</strong>.</li>"
-                        f"<li>The admin reviews your request. {last}</li></ol>",
-                        unsafe_allow_html=True,
-                    )
-                    st.button("Register with Google", key="google_register", on_click=st.login)
-                    _note("Google only shares your name and email address with this app. "
-                          "No password is stored here.")
-                else:
-                    st.markdown('<p class="ava-tab-lede">Accounts are by invitation. Ask the person '
-                                "who runs this app to add your Google account, then sign in.</p>",
-                                unsafe_allow_html=True)
+        with st.container(key="signin_box"):
+            _auth_tabs(active)
+            if active == "signup":
+                _signup_panel(settings, email_ok)
+            else:
+                _signin_panel(settings, email_ok)
+            _note("Your meetings are private: other users can't see them.")
 
     st.markdown(_landing_sections(settings), unsafe_allow_html=True)
 
 
-def request_page(email: str, status, on_request, on_request_args=(), error: str = None):
-    """For a verified Google account that isn't on the list yet."""
+def register_page():
+    """The front page with the Sign up tab open (?page=register)."""
+    sign_in_page("signup")
+
+
+def reset_page():
+    """Forgot password: a code by email, then a new password."""
+    from core import local_auth
+    st.markdown(SIGNED_OUT_CSS, unsafe_allow_html=True)
+    with st.container(key="signedout"):
+        if email := st.session_state.get("_reset_email"):
+            who = html.escape(email, quote=False)
+            _header("Choose a new password.", f"If {who} has an account, we sent it a 6-digit code. "
+                    "Enter it with your new password.", wide=True)
+            with st.form("reset_form", border=False):
+                code = st.text_input("6-digit code", key="reset_code", max_chars=6)
+                password = st.text_input("New password", type="password", key="reset_password",
+                                         max_chars=128, autocomplete="new-password",
+                                         help=f"At least {local_auth.PASSWORD_MIN} characters.")
+                confirm = st.text_input("Confirm new password", type="password", key="reset_confirm",
+                                        max_chars=128, autocomplete="new-password")
+                done = st.form_submit_button("Set new password", key="reset_submit", type="primary")
+            if done:
+                if password != confirm:
+                    st.error("The two passwords don't match.")
+                else:
+                    try:
+                        token = local_auth.finish_reset(email, code, password)
+                        st.session_state.pop("_reset_email", None)
+                        _complete_sign_in(token)
+                    except local_auth.AuthError as e:
+                        st.error(str(e))
+            if st.button("Use a different email", key="reset_restart"):
+                st.session_state.pop("_reset_email", None)
+                st.rerun()
+            return
+
+        _header("Reset your password.", "Enter the email you registered with. We'll send you a code "
+                "to choose a new password.", wide=True)
+        with st.form("reset_start_form", border=False):
+            email = st.text_input("Email", key="reset_email_input", max_chars=254, autocomplete="email")
+            sent = st.form_submit_button("Send reset code", key="reset_start_submit", type="primary")
+        if sent:
+            try:
+                st.session_state["_reset_email"] = local_auth.start_reset(email)
+                st.rerun()
+            except local_auth.AuthError as e:
+                st.error(str(e))
+        _note(f"Signed in with Google? Google manages that password. {_link(HOME_HREF, 'Back to sign in')}.")
+
+
+def request_page(email: str, status, on_submit, default_name: str = "", error: str = None,
+                 signout_href: str = None):
+    """
+    For a verified account that isn't on the list yet: the registration form
+    (Google accounts), or "waiting for approval". on_submit(name, reason)
+    records the registration.
+    """
+    from core import notify
+    from core.users import NAME_MAX, REASON_MAX
     who = html.escape(email, quote=False)
     st.markdown(SIGNED_OUT_CSS, unsafe_allow_html=True)
     with st.container(key="signedout"):
         if status == "pending":
-            from core import notify
-            then = (f"You'll get an email at {who} when it's approved."
+            then = (f"You'll get an email at {who} as soon as it's approved."
                     if notify.enabled() else "You can use the app as soon as it's approved.")
-            _header("Request sent.", f"Your request for {who} is waiting for the admin's approval. "
-                    f"{then}", wide=True)
+            _header("Registration received.",
+                    f"Your account for {who} is waiting for the admin's approval. {then}", wide=True)
             st.button("Check again", key="request_check")
         else:
-            _header("Request access.", f"You're signed in as {who}. This app is invite only: "
-                    "send a request and the admin will review it.", wide=True)
-            st.button("Request access", key="request_access", on_click=on_request, args=on_request_args)
+            _header("Complete your registration.",
+                    f"You're signed in as {who}. Tell the admin who you are, "
+                    "then submit your registration.", wide=True)
+            with st.form("register_form", border=False):
+                name = st.text_input("Full name", value=default_name or "", max_chars=NAME_MAX, key="reg_name")
+                reason = st.text_area("How will you use AI Video Assistant? (optional)", max_chars=REASON_MAX,
+                                      key="reg_reason", height=90,
+                                      placeholder="For example: summarising my college lectures")
+                agree = st.checkbox("I understand that my recordings are transcribed by Deepgram or Sarvam "
+                                    "and summarised by OpenAI.", key="reg_agree")
+                submitted = st.form_submit_button("Submit registration", key="register_submit", type="primary")
+            if submitted:
+                if not name.strip():
+                    st.error("Enter your name.")
+                elif not agree:
+                    st.error("Tick the box to confirm you understand how recordings are processed.")
+                else:
+                    on_submit(name, reason)
+                    st.rerun()
         if error:
             st.error(error)
-        st.button("Use a different account", key="switch_account_plain", on_click=st.logout)
+        _signout_control(signout_href, key="switch_account_plain")
 
 
-def denied_page(message: str):
+def denied_page(message: str, signout_href: str = None):
     st.markdown(SIGNED_OUT_CSS, unsafe_allow_html=True)
     with st.container(key="signedout"):
         # Escaped: the message contains the email the visitor signed in with.
         _header("This account doesn't have access.", html.escape(message, quote=False), wide=True)
-        st.button("Use a different account", key="switch_account", on_click=st.logout)
-        _note("You'll be signed out and can choose another Google account.")
+        _signout_control(signout_href, key="switch_account")
+        _note("You'll be signed out and can choose another account.")
+

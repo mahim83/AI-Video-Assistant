@@ -43,15 +43,26 @@ def _app_origin() -> str:
 
 
 def _user_from_cookie(headers: dict):
-    """The invited user behind a request's Streamlit login cookie, or None."""
+    """The invited user behind a request's login cookie (Google or email account), or None."""
     from streamlit.web.server import server_util
     from streamlit.web.server.starlette.starlette_app_utils import decode_signed_value
     from streamlit.web.server.starlette.starlette_server_config import USER_COOKIE_NAME
+
+    from core import local_auth
 
     try:
         cookies = SimpleCookie(headers.get("cookie", ""))
     except CookieError:
         return None
+
+    # Email and password accounts: a session looked up server-side.
+    session = cookies.get(local_auth.SESSION_COOKIE)
+    if session is not None and (email := local_auth.session_email(session.value)):
+        try:
+            return authorize(email, True)
+        except AccessDenied:
+            return None
+
     morsel = cookies.get(USER_COOKIE_NAME)
     if morsel is None:
         return None

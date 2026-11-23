@@ -170,13 +170,24 @@ def request_status(email: str):
     return row["status"] if row else None
 
 
-def request_access(email: str, sub=None):
+NAME_MAX = 80
+REASON_MAX = 300
+
+
+def _clean(text, limit: int) -> str:
+    """Registration text is shown to admins and put in emails: one line, no control characters."""
+    text = re.sub(r"[\x00-\x1f\x7f]+", " ", str(text or ""))
+    return re.sub(r"\s+", " ", text).strip()[:limit]
+
+
+def request_access(email: str, sub=None, name: str = None, reason: str = None):
     """
-    Record a request from a signed-in, verified identity. Only reachable
+    Record a registration from a signed-in, verified identity. Only reachable
     after authorize() raised NotInvited, which happens after the
     email_verified check, so unverified addresses can't get here.
     """
     email = normalize_email(email)
+    name, reason = _clean(name, NAME_MAX), _clean(reason, REASON_MAX)
     with db.connect() as con:
         if con.execute("SELECT 1 FROM access_requests WHERE email = ?", (email,)).fetchone():
             return   # one request per email; a rejection stays rejected
@@ -184,18 +195,20 @@ def request_access(email: str, sub=None):
         if pending >= MAX_PENDING_REQUESTS:
             raise ValueError("The app isn't taking new requests right now. Try again later.")
         con.execute(
-            "INSERT INTO access_requests (email, sub, status, requested_at) VALUES (?, ?, 'pending', ?)",
-            (email, str(sub) if sub else None, time.time()),
+            "INSERT INTO access_requests (email, sub, status, requested_at, name, reason) "
+            "VALUES (?, ?, 'pending', ?, ?, ?)",
+            (email, str(sub) if sub else None, time.time(), name or None, reason or None),
         )
     db.audit("access_requested", email=email)
-    notify.new_access_request(email)
+    notify.new_access_request(email, name, reason)
 
 
 def list_requests(actor: User) -> list:
     _require_admin(actor)
     with db.connect() as con:
         rows = con.execute(
-            "SELECT email, requested_at FROM access_requests WHERE status = 'pending' ORDER BY requested_at"
+            "SELECT email, name, reason, requested_at FROM access_requests "
+            "WHERE status = 'pending' ORDER BY requested_at"
         ).fetchall()
     return [dict(r) for r in rows]
 

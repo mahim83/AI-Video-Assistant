@@ -49,7 +49,58 @@ CREATE TABLE IF NOT EXISTS access_requests (
     decided_by   TEXT,
     decided_at   REAL
 );
+-- Email + password accounts (core/local_auth.py). Only a scrypt hash of the
+-- password is stored; codes and session tokens are stored as SHA-256 hashes.
+CREATE TABLE IF NOT EXISTS local_accounts (
+    email         TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at    REAL NOT NULL,
+    failed_logins INTEGER NOT NULL DEFAULT 0,
+    locked_until  REAL NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS pending_registrations (
+    email         TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    reason        TEXT,
+    password_hash TEXT NOT NULL,
+    created_at    REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS email_codes (
+    email      TEXT NOT NULL,
+    purpose    TEXT NOT NULL CHECK (purpose IN ('register', 'reset')),
+    code_hash  TEXT NOT NULL,
+    expires_at REAL NOT NULL,
+    attempts   INTEGER NOT NULL DEFAULT 0,
+    sent_at    REAL NOT NULL,
+    PRIMARY KEY (email, purpose)
+);
+CREATE TABLE IF NOT EXISTS login_tokens (
+    token_hash TEXT PRIMARY KEY,
+    email      TEXT NOT NULL,
+    expires_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT PRIMARY KEY,
+    email      TEXT NOT NULL,
+    created_at REAL NOT NULL,
+    expires_at REAL NOT NULL
+);
 """
+
+# Columns added after a table first shipped. CREATE TABLE IF NOT EXISTS
+# leaves an existing table alone, so they're added here on startup.
+ADDED_COLUMNS = {
+    "access_requests": {"name": "TEXT", "reason": "TEXT"},
+}
+
+
+def _add_missing_columns(con):
+    for table, columns in ADDED_COLUMNS.items():
+        present = {row[1] for row in con.execute(f"PRAGMA table_info({table})")}
+        for column, sql_type in columns.items():
+            if column not in present:
+                con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}")
 
 _init_lock = threading.Lock()
 _initialized = set()   # database paths whose schema exists
@@ -70,6 +121,8 @@ def connect():
                 # WAL lets readers (quota checks) run while another session writes.
                 con.execute("PRAGMA journal_mode=WAL")
                 con.executescript(SCHEMA)
+                _add_missing_columns(con)
+                con.commit()
             finally:
                 con.close()
             _initialized.add(path)

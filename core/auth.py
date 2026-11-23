@@ -1,17 +1,24 @@
 """
-Sign-in for the web app. Google login runs through Streamlit's built-in OIDC
-support (st.login, configured in .streamlit/secrets.toml). The identity it
-returns is checked against the invite list on every rerun, so access granted
-or revoked by an admin applies at the user's next click.
+Sign-in for the web app, two ways:
+
+- Google, through Streamlit's built-in OIDC support (st.login, configured in
+  .streamlit/secrets.toml);
+- email and password (core/local_auth.py), whose session lives in an
+  HttpOnly cookie set by server.py.
+
+Either way the identity is checked against the invite list on every rerun,
+so access granted or revoked by an admin applies at the user's next click.
 """
 import time
 
 import streamlit as st
 
-from core import db, ui, users
+from core import db, local_auth, ui, users
 from core.errors import AccessDenied
 from core.settings import get_settings
 from core.users import LOCAL_USER, NotInvited, User, authorize
+
+SIGN_OUT_LOCAL = "/local-auth/signout"
 
 LOOPBACK = ("localhost", "127.0.0.1", "::1")
 # The placeholder in .streamlit/secrets.toml.example.
@@ -45,6 +52,23 @@ def cookie_secret_problem(secret: str):
     return None
 
 
+def _session_cookie() -> str:
+    """The email-account session cookie, read from the connection's own request."""
+    try:
+        return st.context.cookies.get(local_auth.SESSION_COOKIE, "") or ""
+    except Exception:
+        return ""
+
+
+def signed_in_with_password() -> bool:
+    return st.session_state.get("_auth_method") == "password"
+
+
+def sign_out_href():
+    """Where "Sign out" goes: email accounts clear their cookie at this route."""
+    return SIGN_OUT_LOCAL if signed_in_with_password() else None
+
+
 def _deny(email, message: str):
     label = str(email or "?")
     # At most one row per email per hour, so scripted sign-ins can't push
@@ -53,15 +77,26 @@ def _deny(email, message: str):
         st.session_state["_denied_email"] = email
         if not db.audited_since("login_denied", label, time.time() - 3600):
             db.audit("login_denied", email=label)
-    ui.denied_page(message)
+    ui.denied_page(message, signout_href=sign_out_href())
     st.stop()
 
 
-def _submit_request(email: str, sub):
+def _submit_request(email: str, sub, name: str, reason: str):
     try:
-        users.request_access(email, sub)
+        users.request_access(email, sub, name=name, reason=reason)
     except ValueError as e:
         st.session_state["_request_error"] = str(e)
+
+
+def _signed_out_pages():
+    page = st.query_params.get("page")
+    if page == "register":
+        ui.register_page()
+    elif page == "reset":
+        ui.reset_page()
+    else:
+        ui.sign_in_page()
+    st.stop()
 
 
 def require_user() -> User:
@@ -93,22 +128,34 @@ def require_user() -> User:
         st.error(problem)
         st.stop()
 
-    if not st.user.is_logged_in:
-        ui.sign_in_page()
-        st.stop()
+    if st.user.is_logged_in:
+        st.session_state["_auth_method"] = "google"
+        email, verified, sub = st.user.get("email"), st.user.get("email_verified"), st.user.get("sub")
+        default_name = st.user.get("name") or ""
+    elif (email := local_auth.session_email(_session_cookie())):
+        # Email accounts are verified with a code before they exist.
+        st.session_state["_auth_method"] = "password"
+        verified, sub = True, None
+        default_name = local_auth.account_name(email) or ""
+    else:
+        st.session_state.pop("_auth_method", None)
+        _signed_out_pages()
 
-    email = st.user.get("email")
-    sub = st.user.get("sub")
     try:
-        user = authorize(email, st.user.get("email_verified"), sub)
+        user = authorize(email, verified, sub)
     except NotInvited as e:
         if settings.signup_mode != "request":
             _deny(email, str(e))
         status = users.request_status(e.email)
         if status == "rejected":
             _deny(email, "Your request to use this app was declined.")
-        ui.request_page(e.email, status, on_request=_submit_request, on_request_args=(e.email, sub),
-                        error=st.session_state.pop("_request_error", None))
+        ui.request_page(
+            e.email, status,
+            on_submit=lambda name, reason: _submit_request(e.email, sub, name, reason),
+            default_name=default_name,
+            error=st.session_state.pop("_request_error", None),
+            signout_href=sign_out_href(),
+        )
         st.stop()
     except AccessDenied as e:
         _deny(email, str(e))

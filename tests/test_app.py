@@ -24,12 +24,29 @@ class FakeUser(dict):
 STRONG_SECRET = "s" * 48
 
 
-def run(monkeypatch, signed_in_as=None, verified=True, sub=None, secret=STRONG_SECRET):
+def run(monkeypatch, signed_in_as=None, verified=True, sub=None, secret=STRONG_SECRET,
+        session_cookie="", page=None):
     monkeypatch.setattr(core.auth, "_auth_configured", lambda: True)
     monkeypatch.setattr(core.auth, "_cookie_secret", lambda: secret)
+    monkeypatch.setattr(core.auth, "_session_cookie", lambda: session_cookie)
     claims = {"email": signed_in_as, "email_verified": verified, "sub": sub} if signed_in_as else {}
     monkeypatch.setattr(streamlit, "user", FakeUser(claims))
-    return AppTest.from_file(APP, default_timeout=300).run()
+    at = AppTest.from_file(APP, default_timeout=300)
+    if page:
+        at.query_params["page"] = page
+    return at.run()
+
+
+def enable_email(monkeypatch):
+    """SMTP configured (so email accounts are offered), with mail captured, not sent."""
+    from core import notify
+    from core.settings import get_settings
+    monkeypatch.setenv("SMTP_USER", "app@gmail.com")
+    monkeypatch.setenv("SMTP_PASSWORD", "x" * 16)
+    get_settings.cache_clear()
+    outbox = []
+    monkeypatch.setattr(notify, "send", lambda to, subject, body: outbox.append((to, subject, body)))
+    return outbox
 
 
 def texts(at):
@@ -64,13 +81,20 @@ def test_denied_logins_are_logged_once_per_hour(monkeypatch):
 
 
 def test_request_access_flow(monkeypatch):
-    # A new Google account asks for access...
+    # A new Google account fills in the registration form...
     at = run(monkeypatch, "newcomer@example.com")
     assert not at.sidebar.radio
-    assert "Request access." in texts(at)
-    at.button(key="request_access").click().run()
-    assert "Request sent." in texts(at)
+    assert "Complete your registration." in texts(at)
+    at.text_input(key="reg_name").input("New Comer")
+    at.button(key="register_submit").click().run()
+    assert "Tick the box" in texts(at)                 # consent is required
+    at.checkbox(key="reg_agree").check()
+    at.text_area(key="reg_reason").input("Summarising my lectures")
+    at.button(key="register_submit").click().run()
+    assert "Registration received." in texts(at)
     assert not at.sidebar.radio
+    owner = users.authorize("owner@example.com", True)
+    assert users.list_requests(owner)[0]["name"] == "New Comer"
 
     # ...the admin sees it waiting and approves it...
     admin = run(monkeypatch, "owner@example.com")
@@ -85,25 +109,74 @@ def test_request_access_flow(monkeypatch):
 
 
 def test_rejected_request_sees_no_access(monkeypatch):
-    run(monkeypatch, "newcomer@example.com").button(key="request_access").click().run()
+    users.request_access("newcomer@example.com", name="New Comer")
     owner = users.authorize("owner@example.com", True)
     users.reject_request(owner, "newcomer@example.com")
     at = run(monkeypatch, "newcomer@example.com")
     assert "declined" in texts(at)
-    assert "request_access" not in [b.key for b in at.button]
+    assert "register_submit" not in [b.key for b in at.button]
 
 
 def test_unverified_email_cannot_request(monkeypatch):
     at = run(monkeypatch, "newcomer@example.com", verified=False)
     assert "isn't verified" in texts(at)
-    assert "Request access." not in texts(at)
+    assert "Complete your registration." not in texts(at)
 
 
 def test_signed_out_sees_only_sign_in(monkeypatch):
     at = run(monkeypatch)
     assert not at.exception
-    assert [b.label for b in at.button] == ["Continue with Google", "Register with Google"]
+    # Without SMTP settings, email accounts aren't offered: Google only.
+    assert [b.label for b in at.button] == ["Sign in with Google"]
+    assert "Don't have an account?" in texts(at) and "Sign up" in texts(at)
     assert not at.sidebar.radio
+
+
+def test_sign_in_page_offers_both_with_email_set_up(monkeypatch):
+    enable_email(monkeypatch)
+    at = run(monkeypatch)
+    labels = [b.label for b in at.button]
+    assert "Sign in with Google" in labels and "Sign in" in labels
+    assert "or sign in with email" in texts(at) and "Forgot your password?" in texts(at)
+
+
+def test_register_page_with_email(monkeypatch):
+    outbox = enable_email(monkeypatch)
+    at = run(monkeypatch, page="register")
+    assert "Sign up with Google" in [b.label for b in at.button]
+    assert "Already registered?" in texts(at)
+
+    at.text_input(key="er_name").input("Asha Rao")
+    at.text_input(key="er_email").input("asha@example.com")
+    at.text_input(key="er_password").input("river stone lantern")
+    at.text_input(key="er_confirm").input("river stone lantern")
+    at.checkbox(key="er_agree").check()
+    at.button(key="er_submit").click().run()
+    assert not at.exception
+    assert "Check your email." in texts(at)
+    code = outbox[-1][1].split()[-1]                 # "Your AI Video Assistant code: 123456"
+
+    at.text_input(key="verify_code").input(code)
+    at.button(key="verify_submit").click().run()
+    assert "/local-auth/complete?token=" in texts(at)
+    owner = users.authorize("owner@example.com", True)
+    assert [r["email"] for r in users.list_requests(owner)] == ["asha@example.com"]
+
+
+def test_email_account_session_signs_in(monkeypatch):
+    from core import local_auth
+    outbox = enable_email(monkeypatch)
+    owner = users.authorize("owner@example.com", True)
+    local_auth.start_registration("Asha Rao", "asha@example.com", "river stone lantern")
+    code = outbox[-1][1].split()[-1]
+    token = local_auth.finish_registration("asha@example.com", code)
+    users.approve_request(owner, "asha@example.com")
+    session, _ = local_auth.redeem_login_token(token)
+
+    at = run(monkeypatch, session_cookie=session)
+    assert not at.exception
+    assert at.sidebar.radio[0].options == ["New video", "Saved meetings"]
+    assert "/local-auth/signout" in " ".join(m.value for m in at.sidebar.markdown)
 
 
 def test_uninvited_account_is_denied_and_audited(monkeypatch):
