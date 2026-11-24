@@ -180,7 +180,7 @@ def test_register_page_with_email(monkeypatch):
     at.checkbox(key="er_agree").check()
     at.button(key="er_submit").click().run()
     assert not at.exception
-    assert "Check your email." in texts(at)
+    assert "Check your email." in texts(at) and "Check your Spam folder." in texts(at)
     code = outbox[-1][1].split()[-1]                 # "Your AI Video Assistant code: 123456"
 
     at.text_input(key="verify_code").input(code)

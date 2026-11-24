@@ -518,7 +518,8 @@ def _signup_panel(settings, email_ok: bool):
     if pending := st.session_state.get("_verify_email"):
         who = html.escape(pending, quote=False)
         st.markdown(f'<p class="ava-tab-lede"><strong>Check your email.</strong> We sent a 6-digit code '
-                    f"to {who}. Enter it to finish creating your account. It expires in 15 minutes.</p>",
+                    f"to {who}. Enter it to finish creating your account. It expires in 15 minutes.</p>"
+                    '<p class="ava-tab-lede">Can\'t find it? Check your Spam folder.</p>',
                     unsafe_allow_html=True)
         with st.form("verify_form", border=False):
             code = st.text_input("6-digit code", key="verify_code", max_chars=6)
@@ -647,7 +648,8 @@ def reset_page():
         if email := st.session_state.get("_reset_email"):
             who = html.escape(email, quote=False)
             _header("Choose a new password.", f"If {who} has an account, we sent it a 6-digit code. "
-                    "Enter it with your new password.", wide=True, brand=False)
+                    "Enter it with your new password. Can't find it? Check your Spam folder.",
+                    wide=True, brand=False)
             with st.form("reset_form", border=False):
                 code = st.text_input("6-digit code", key="reset_code", max_chars=6)
                 password = st.text_input("New password", type="password", key="reset_password",
