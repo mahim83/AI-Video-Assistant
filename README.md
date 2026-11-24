@@ -2,13 +2,15 @@
 
 Turn a YouTube video or an audio/video file into a **transcript**, a **title and summary**, and a **chat** where you ask questions about what was said.
 
+**Try it live: [ai-video-assistant.duckdns.org](https://ai-video-assistant.duckdns.org)**. Sign up with Google or your email; new accounts are approved by the admin, and you get an email when yours is ready. On the live site, upload a file: YouTube links work when you run the app on your own computer.
+
 - **Transcribe** English with Deepgram, Hindi-English (Hinglish) with Sarvam, or offline with Whisper.
 - **Summarize** the recording into bullet points with OpenAI.
 - **Chat** with the video. Answers are based on the most relevant parts of the transcript, found with hybrid search and reranking. Follow-up questions such as "who created it?" understand the recent chat.
 - **Measured**: retrieval and answer quality are evaluated with a retrieval benchmark and RAGAS. See [Evaluation](#evaluation).
 - **Keep** your meetings: reopen them later, download the transcript, or delete them with all their data.
 - Use it as a **web app** (Streamlit) or from the **terminal**.
-- **Deploy** it for an invited group: Google sign-in, an invite list with admin and user roles, a private space per user, quotas and guardrails. See [DEPLOY.md](DEPLOY.md).
+- **Deploy** it for others: Google or email sign-in, accounts approved by an admin, admin and user roles, a private space per user, quotas and guardrails. See [DEPLOY.md](DEPLOY.md), or [DEPLOY-AWS.md](DEPLOY-AWS.md) for the AWS setup the live site uses.
 
 ## How it works
 
@@ -395,6 +397,10 @@ AI Video Assistant/
 ├── requirements-dev.txt    Adds pytest
 └── requirements-eval.txt   Dependencies for the RAGAS evaluation (separate venv)
 ```
+
+## Author
+
+Made by [Mahim Katiyar](https://github.com/mahim83). Live site: [ai-video-assistant.duckdns.org](https://ai-video-assistant.duckdns.org).
 
 ## License
 
