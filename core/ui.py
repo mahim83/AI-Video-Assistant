@@ -594,8 +594,6 @@ def home_page():
                 f"{how} You get the full transcript, a short summary, "
                 "and answers drawn from what was actually said.", caption=False, follow=True,
                 brand=False)
-        _note("Your meetings are private: other users can't see them.", follow=True)
-
     st.markdown(_landing_sections(settings), unsafe_allow_html=True)
 
 
