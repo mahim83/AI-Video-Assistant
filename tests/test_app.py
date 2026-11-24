@@ -109,6 +109,32 @@ def test_google_sign_up_goes_straight_in(monkeypatch):
     assert "Anyone can sign up" in texts(admin)
 
 
+def test_admin_can_revoke_anyone_who_signed_up(monkeypatch):
+    """Google and email sign-ups both appear by name, and revoking works from the page."""
+    from core import db, local_auth
+    users.register("g@example.com", sub="g-1", name="Google Person")
+    with db.connect() as con:
+        con.execute("INSERT INTO local_accounts (email, name, password_hash, created_at) VALUES (?, ?, ?, 0)",
+                    ("e@example.com", "Email Person", local_auth.hash_password("river stone lantern")))
+    users.register("e@example.com", method="email")
+
+    admin = run(monkeypatch, "owner@example.com")
+    admin.sidebar.radio[0].set_value("Admin").run()
+    assert not admin.exception
+    picker = admin.selectbox(key="manage_target")
+    labels = picker.options            # AppTest gives the labels as shown
+    assert "Google Person (g@example.com)" in labels and "Email Person (e@example.com)" in labels
+    assert not any("owner@example.com" in l or "friend@example.com" in l for l in labels)
+
+    picker.set_value("g@example.com").run()
+    admin.button(key="revoke_user").click().run()
+    assert not admin.exception
+    assert "Google Person (g@example.com) can no longer sign in" in " ".join(s.value for s in admin.success)
+    assert users.is_revoked("g@example.com")
+    restore = admin.selectbox(key="restore_target")
+    assert restore.options == ["Google Person (g@example.com)"]
+
+
 def test_revoked_user_sees_no_access(monkeypatch):
     users.register("newcomer@example.com", name="New Comer")
     owner = users.authorize("owner@example.com", True)

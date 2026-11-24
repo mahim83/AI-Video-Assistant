@@ -113,7 +113,9 @@ people you add.
 In the sidebar, choose **Admin**:
 
 - **Invite a user**: enter their email and choose a role. They can sign in right away.
-- **Revoke access**: takes effect at their next click, and they can't sign up again with that email. Their meetings stay on disk. Adding them under **Invite a user** lets them back in.
+- **Users**: everyone with access, by name and email: how they sign in (Google, email or both), when they joined and last signed in, how many meetings they have, and their usage today and in total.
+- **Manage a user**: pick anyone, whether they signed up with Google or email or were invited, by name. Change their role between user and admin; **Revoke access**, which takes effect at their next click and stops that email signing up again (their meetings stay on disk); or **Delete** them with all their meetings and data, optionally blocking the email too. Users set in `ADMIN_EMAILS` or `ALLOWED_EMAILS`, and your own account, are changed in `.env` instead.
+- **Revoked emails**: everyone revoked, with **Restore** to let them back in as a regular user.
 - **Users and today's usage** and the **Audit log** show who did what. The log records actions (sign-in, processed, opened, deleted), never questions or transcripts.
 
 ## 7. Bring over your existing meetings (optional)

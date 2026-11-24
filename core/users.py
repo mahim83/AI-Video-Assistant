@@ -8,6 +8,7 @@ until an admin adds it back. With SIGNUP_MODE=invite, only emails an admin
 added get in.
 """
 import hashlib
+import os
 import re
 import time
 from dataclasses import dataclass
@@ -112,6 +113,14 @@ def _require_admin(actor: User):
         raise PermissionError("Only admins can manage users.")
 
 
+def _names(con) -> dict:
+    """email -> best known name: what they typed at sign-up, else their email account's name."""
+    names = {r["email"]: r["name"] for r in con.execute("SELECT email, name FROM local_accounts")}
+    for r in con.execute("SELECT email, name FROM users WHERE name IS NOT NULL AND name != ''"):
+        names[r["email"]] = r["name"]
+    return names
+
+
 def list_users(actor: User) -> list:
     _require_admin(actor)
     settings = get_settings()
@@ -121,9 +130,137 @@ def list_users(actor: User) -> list:
     with db.connect() as con:
         for r in con.execute("SELECT email, role, added_by, added_at FROM users"):
             rows[r["email"]] = {**dict(r), "source": SIGNED_UP if r["added_by"] == SIGNED_UP else "app"}
+        names = _names(con)
     for email in settings.admin_emails:
         rows[email] = {"email": email, "role": "admin", "source": "ADMIN_EMAILS", "added_by": "", "added_at": None}
+    for r in rows.values():
+        r["name"] = names.get(r["email"]) or ""
     return sorted(rows.values(), key=lambda r: (r["role"] != "admin", r["email"]))
+
+
+def label(row: dict) -> str:
+    """How a person is shown in the admin's pickers: "Asha Rao (asha@example.com)"."""
+    return f"{row['name']} ({row['email']})" if row.get("name") else row["email"]
+
+
+def remember_name(email: str, name: str):
+    """Fill in a missing name, e.g. from Google's profile for people who signed up before names were kept."""
+    name = _clean(name, NAME_MAX)
+    if not name:
+        return
+    with db.connect() as con:
+        con.execute("UPDATE users SET name = ? WHERE email = ? AND (name IS NULL OR name = '')",
+                    (name, normalize_email(email)))
+
+
+def user_details(actor: User) -> list:
+    """
+    Everything the admin page shows about each user: list_users() plus how
+    they signed in, when they joined and last signed in, their meeting count,
+    and today's and all-time usage.
+    """
+    from core import storage
+    from core.guardrails import day_start
+    rows = list_users(actor)
+    with db.connect() as con:
+        google = {r["email"]: r["first_seen"] for r in con.execute("SELECT email, first_seen FROM identities")}
+        local = {r["email"]: r["created_at"] for r in con.execute("SELECT email, created_at FROM local_accounts")}
+        last = {r["email"]: r["ts"] for r in con.execute(
+            "SELECT email, MAX(ts) AS ts FROM audit WHERE action = 'login' GROUP BY email")}
+    today, ever = db.totals_since(day_start()), db.totals_since(0)
+    for r in rows:
+        email, uid = r["email"], user_id_for(r["email"])
+        r["method"] = " + ".join(m for m, on in (("Google", email in google), ("Email", email in local)) if on) \
+            or "Not signed in yet"
+        joined = [t for t in (r.get("added_at"), google.get(email), local.get(email)) if t]
+        r["joined"] = min(joined) if joined else None
+        r["last_sign_in"] = last.get(email)
+        r["meetings"] = len(storage.list_meetings(storage.user_space(uid)))
+        r["today"], r["total"] = today.get(uid, {}), ever.get(uid, {})
+    return rows
+
+
+def _manageable(actor: User, email: str) -> str:
+    email = normalize_email(email)
+    if email == actor.email:
+        raise ValueError("You can't change your own account here.")
+    settings = get_settings()
+    if email in settings.admin_emails or email in settings.allowed_emails:
+        raise ValueError(
+            f"{email} is set in ADMIN_EMAILS or ALLOWED_EMAILS. Change it there and restart the app."
+        )
+    return email
+
+
+def set_role(actor: User, email: str, role: str):
+    """Promote a user to admin or demote an admin to user."""
+    _require_admin(actor)
+    email = _manageable(actor, email)
+    if role not in ROLES:
+        raise ValueError(f"Role must be one of {', '.join(ROLES)}.")
+    with db.connect() as con:
+        changed = con.execute("UPDATE users SET role = ? WHERE email = ?", (role, email)).rowcount
+    if not changed:
+        raise ValueError(f"{email} isn't in the user list.")
+    db.audit("role_changed", actor, detail=f"{email} to {role}")
+
+
+def list_revoked(actor: User) -> list:
+    _require_admin(actor)
+    with db.connect() as con:
+        names = _names(con)
+        rows = [dict(r) for r in con.execute(
+            "SELECT email, name, decided_by, COALESCE(decided_at, requested_at) AS revoked_at "
+            "FROM access_requests WHERE status = 'rejected' ORDER BY revoked_at DESC")]
+    for r in rows:
+        r["name"] = r["name"] or names.get(r["email"]) or ""
+    return rows
+
+
+def restore_user(actor: User, email: str):
+    """Lift a revocation and give the person access again as a regular user."""
+    _require_admin(actor)
+    email = _manageable(actor, email)
+    if not is_revoked(email):
+        raise ValueError(f"{email} isn't revoked.")
+    with db.connect() as con:
+        row = con.execute("SELECT name FROM access_requests WHERE email = ?", (email,)).fetchone()
+    add_user(actor, email, "user")   # also clears the revocation
+    if row and row["name"]:
+        remember_name(email, row["name"])
+    db.audit("user_restored", actor, detail=email)
+
+
+def delete_user(actor: User, email: str, block: bool = True):
+    """
+    Delete a person entirely: their access, email account, sessions, usage
+    counts, and every meeting and search index on disk. With block, the email
+    also can't sign up again until an admin adds it back. The audit log keeps
+    its record of what they did.
+    """
+    from core import storage
+    _require_admin(actor)
+    email = _manageable(actor, email)
+    uid = user_id_for(email)
+    space = storage.user_space(uid)
+    with db.connect() as con:
+        name = _names(con).get(email)
+        known = any(con.execute(f"SELECT 1 FROM {t} WHERE email = ?", (email,)).fetchone()
+                    for t in ("users", "local_accounts", "identities", "access_requests"))
+        if not known and not os.path.isdir(space.root):
+            raise ValueError(f"{email} has no account or data here.")
+        for table in ("users", "local_accounts", "sessions", "login_tokens", "pending_registrations",
+                      "email_codes", "identities", "access_requests"):
+            con.execute(f"DELETE FROM {table} WHERE email = ?", (email,))
+        con.execute("DELETE FROM events WHERE user_id = ?", (uid,))
+        if block:
+            con.execute(
+                "INSERT INTO access_requests (email, status, requested_at, decided_by, decided_at, name) "
+                "VALUES (?, 'rejected', ?, ?, ?, ?)",
+                (email, time.time(), actor.email, time.time(), name),
+            )
+    storage.delete_user_space(space)
+    db.audit("user_deleted", actor, detail=email + (" (blocked)" if block else ""))
 
 
 def add_user(actor: User, email: str, role: str = "user", send_invite: bool = False):
@@ -166,13 +303,15 @@ def remove_user(actor: User, email: str):
             f"{email} is set in ADMIN_EMAILS or ALLOWED_EMAILS. Remove it there and restart the app."
         )
     with db.connect() as con:
+        name = _names(con).get(email)   # kept with the revocation, so the admin still sees who it was
         removed = con.execute("DELETE FROM users WHERE email = ?", (email,)).rowcount
         if removed:
             con.execute(
-                "INSERT INTO access_requests (email, status, requested_at, decided_by, decided_at) "
-                "VALUES (?, 'rejected', ?, ?, ?) ON CONFLICT(email) DO UPDATE SET "
-                "status = 'rejected', decided_by = excluded.decided_by, decided_at = excluded.decided_at",
-                (email, time.time(), actor.email, time.time()),
+                "INSERT INTO access_requests (email, status, requested_at, decided_by, decided_at, name) "
+                "VALUES (?, 'rejected', ?, ?, ?, ?) ON CONFLICT(email) DO UPDATE SET "
+                "status = 'rejected', decided_by = excluded.decided_by, decided_at = excluded.decided_at, "
+                "name = excluded.name",
+                (email, time.time(), actor.email, time.time(), name),
             )
     if not removed:
         raise ValueError(f"{email} isn't in the user list.")
@@ -220,8 +359,8 @@ def register(email: str, sub=None, name: str = None, reason: str = None, method:
     with db.connect() as con:
         # OR IGNORE: a double click registers once and sends one email.
         added = con.execute(
-            "INSERT OR IGNORE INTO users (email, role, added_by, added_at) VALUES (?, 'user', ?, ?)",
-            (email, SIGNED_UP, time.time()),
+            "INSERT OR IGNORE INTO users (email, role, added_by, added_at, name) VALUES (?, 'user', ?, ?, ?)",
+            (email, SIGNED_UP, time.time(), name or None),
         ).rowcount
         # A request left over from the approve-first sign-up is settled now.
         con.execute("DELETE FROM access_requests WHERE email = ? AND status = 'pending'", (email,))

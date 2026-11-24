@@ -128,3 +128,96 @@ def test_list_users_shows_sources(owner):
         "added@example.com": "app",
         "joined@example.com": "sign-up",
     }
+
+
+def test_signed_up_users_can_be_managed_and_show_their_name(owner):
+    """The bug: people who signed up themselves were missing from the admin's revoke list."""
+    users.register("srao@example.com", sub="g-9", name="S Rao")
+    row = next(r for r in users.list_users(owner) if r["email"] == "srao@example.com")
+    assert row["source"] == "sign-up" and row["name"] == "S Rao"
+    assert users.label(row) == "S Rao (srao@example.com)"
+
+    users.set_role(owner, "srao@example.com", "admin")
+    assert users.authorize("srao@example.com", True, sub="g-9").is_admin
+    users.set_role(owner, "srao@example.com", "user")
+
+    users.remove_user(owner, "srao@example.com")
+    revoked = users.list_revoked(owner)
+    assert [(r["email"], r["name"]) for r in revoked] == [("srao@example.com", "S Rao")]
+    users.restore_user(owner, "srao@example.com")
+    assert users.authorize("srao@example.com", True, sub="g-9").role == "user"
+    assert users.list_revoked(owner) == []
+    assert users.label(next(r for r in users.list_users(owner) if r["email"] == "srao@example.com")) \
+        == "S Rao (srao@example.com)"
+
+
+def test_user_details(owner):
+    from core import storage
+    users.register("srao@example.com", sub="g-9", name="S Rao")
+    db.audit("login", email="srao@example.com")
+    uid = users.user_id_for("srao@example.com")
+    db.record_event(uid, "video")
+    db.record_event(uid, "question", 3)
+    space = storage.user_space(uid)
+    import os
+    os.makedirs(space.meetings_dir)
+    open(os.path.join(space.meetings_dir, "talk_20260101.json"), "w").write("{}")
+
+    row = next(r for r in users.user_details(owner) if r["email"] == "srao@example.com")
+    assert row["method"] == "Google"
+    assert row["joined"] and row["last_sign_in"]
+    assert row["meetings"] == 1
+    assert row["today"]["video"] == 1 and row["total"]["question"] == 3
+
+
+def test_google_name_is_filled_in_later():
+    users.register("old@example.com")                 # signed up before names were kept
+    users.remember_name("old@example.com", "Old Timer")
+    users.remember_name("old@example.com", "Someone Else")   # never overwrites
+    owner = users.authorize("owner@example.com", True)
+    assert users.label(next(r for r in users.list_users(owner) if r["email"] == "old@example.com")) \
+        == "Old Timer (old@example.com)"
+
+
+def test_delete_user_removes_everything(owner):
+    import os
+    from core import storage
+    users.register("gone@example.com", sub="g-1", name="Gone")
+    uid = users.user_id_for("gone@example.com")
+    space = storage.user_space(uid)
+    os.makedirs(space.meetings_dir)
+    db.record_event(uid, "video")
+
+    users.delete_user(owner, "gone@example.com", block=False)
+    assert not os.path.exists(space.root)
+    assert "gone@example.com" not in [r["email"] for r in users.list_users(owner)]
+    assert db.total_since(uid, "video", 0) == 0
+    with db.connect() as con:
+        assert con.execute("SELECT 1 FROM identities WHERE email = 'gone@example.com'").fetchone() is None
+    users.register("gone@example.com", sub="g-2")     # not blocked: a fresh start is allowed
+
+    users.delete_user(owner, "gone@example.com")      # blocked by default
+    with pytest.raises(AccessDenied, match="revoked"):
+        users.register("gone@example.com")
+    assert [r["email"] for r in users.list_revoked(owner)] == ["gone@example.com"]
+    assert "user_deleted" in [r["action"] for r in db.recent_audit()]
+
+
+def test_manage_guard_rails(owner, friend):
+    users.register("x@example.com")
+    for fn in (lambda: users.set_role(friend, "x@example.com", "admin"),
+               lambda: users.delete_user(friend, "x@example.com"),
+               lambda: users.list_revoked(friend),
+               lambda: users.user_details(friend)):
+        with pytest.raises(PermissionError):
+            fn()
+    with pytest.raises(ValueError):
+        users.set_role(owner, "owner@example.com", "user")       # yourself
+    with pytest.raises(ValueError):
+        users.delete_user(owner, "friend@example.com")           # set in .env
+    with pytest.raises(ValueError):
+        users.set_role(owner, "x@example.com", "superuser")
+    with pytest.raises(ValueError):
+        users.delete_user(owner, "nobody@example.com")
+    with pytest.raises(ValueError):
+        users.restore_user(owner, "x@example.com")               # not revoked

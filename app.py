@@ -179,38 +179,101 @@ def _admin_page():
             except (ValueError, PermissionError) as e:
                 st.error(str(e))
 
-    rows = users.list_users(user)
-    removable = [r["email"] for r in rows if r["source"] == "app" and r["email"] != user.email]
-    if removable:
-        c1, c2 = st.columns([3, 1], vertical_alignment="bottom")
-        target = c1.selectbox("Revoke access", removable)
-        if c2.button("Revoke", use_container_width=True):
-            try:
-                users.remove_user(user, target)
-                st.success(f"{target} can no longer sign in or sign up again. Their meetings stay on "
-                           "disk. Add them under Invite a user to let them back in.")
-                rows = users.list_users(user)
-            except (ValueError, PermissionError) as e:
-                st.error(str(e))
+    # Messages from the last action, shown after the rerun that refreshes the tables.
+    if done := st.session_state.pop("_admin_done", None):
+        st.success(done)
 
-    st.markdown("#### Users and today's usage")
+    rows = users.user_details(user)
+    st.markdown(f"#### Users ({len(rows)})")
     st.caption("Limits reset at 00:00 UTC. Admins have no daily limits. "
                "Users from ADMIN_EMAILS or ALLOWED_EMAILS are changed in .env.")
-    today = db.totals_since(guardrails.day_start())
+
+    def when(ts):
+        return datetime.fromtimestamp(ts, timezone.utc).strftime("%d %b %Y, %H:%M") if ts else ""
+
     st.dataframe(
         [
             {
+                "Name": r["name"],
                 "Email": r["email"],
                 "Role": r["role"],
                 "Added via": r["source"],
-                "Videos": int(today.get(users.user_id_for(r["email"]), {}).get("video", 0)),
-                "Audio min": round(today.get(users.user_id_for(r["email"]), {}).get("audio_minutes", 0)),
-                "Questions": int(today.get(users.user_id_for(r["email"]), {}).get("question", 0)),
+                "Signs in with": r["method"],
+                "Joined (UTC)": when(r["joined"]),
+                "Last sign-in (UTC)": when(r["last_sign_in"]),
+                "Meetings": r["meetings"],
+                "Videos today": int(r["today"].get("video", 0)),
+                "Questions today": int(r["today"].get("question", 0)),
+                "Videos total": int(r["total"].get("video", 0)),
+                "Audio min total": round(r["total"].get("audio_minutes", 0)),
+                "Questions total": int(r["total"].get("question", 0)),
             }
             for r in rows
         ],
         hide_index=True, use_container_width=True,
     )
+
+    fixed = settings.admin_emails | settings.allowed_emails
+    manageable = {r["email"]: r for r in rows if r["email"] != user.email and r["email"] not in fixed}
+    st.markdown("#### Manage a user")
+    if not manageable:
+        st.caption("Nobody to manage yet. People who sign up or are invited appear here.")
+    else:
+        target = st.selectbox("User", list(manageable), format_func=lambda e: users.label(manageable[e]),
+                              key="manage_target")
+        picked = manageable[target]
+        st.caption(f"{picked['role'].capitalize()} · signs in with {picked['method']} · "
+                   f"{picked['meetings']} meeting{'s' if picked['meetings'] != 1 else ''}")
+        who = users.label(picked)
+
+        def act(fn, message):
+            try:
+                fn()
+                st.session_state["_admin_done"] = message
+                st.rerun()
+            except (ValueError, PermissionError) as e:
+                st.error(str(e))
+
+        c1, c2 = st.columns([3, 1], vertical_alignment="bottom")
+        new_role = c1.selectbox("Role", users.ROLES, index=users.ROLES.index(picked["role"]),
+                                key=f"role_{target}")
+        if c2.button("Save role", use_container_width=True, disabled=new_role == picked["role"]):
+            act(lambda: users.set_role(user, target, new_role), f"{who} is now {new_role}.")
+
+        if st.button("Revoke access", icon=":material/block:", key="revoke_user"):
+            act(lambda: users.remove_user(user, target),
+                f"{who} can no longer sign in or sign up again. Their meetings stay on disk; "
+                "restore them under Revoked emails.")
+
+        with st.expander("Delete this user and all their data"):
+            st.caption("Removes their account, sign-in sessions, usage counts, and every meeting and "
+                       "search index. This can't be undone. The audit log keeps its record.")
+            block = st.checkbox("Also stop this email signing up again", value=True, key="delete_block")
+            sure = st.checkbox(f"Yes, permanently delete {who}", key="delete_sure")
+            if st.button("Delete user", type="primary", disabled=not sure, key="delete_user"):
+                act(lambda: users.delete_user(user, target, block=block),
+                    f"{who} and all their meetings were deleted.")
+
+    revoked = users.list_revoked(user)
+    if revoked:
+        st.markdown(f"#### Revoked emails ({len(revoked)})")
+        st.caption("They can't sign in or sign up. Restoring one gives them access again as a regular user.")
+        st.dataframe(
+            [{"Name": r["name"], "Email": r["email"], "Revoked (UTC)": when(r["revoked_at"]),
+              "By": r["decided_by"] or ""} for r in revoked],
+            hide_index=True, use_container_width=True,
+        )
+        by_email = {r["email"]: r for r in revoked}
+        c1, c2 = st.columns([3, 1], vertical_alignment="bottom")
+        back = c1.selectbox("Revoked email", list(by_email), format_func=lambda e: users.label(by_email[e]),
+                            key="restore_target")
+        if c2.button("Restore", use_container_width=True, key="restore_user"):
+            try:
+                users.restore_user(user, back)
+                st.session_state["_admin_done"] = f"{users.label(by_email[back])} can use the app again."
+                st.rerun()
+            except (ValueError, PermissionError) as e:
+                st.error(str(e))
 
     st.markdown("#### Audit log")
     st.caption("Latest 200 events. Questions and transcripts are never logged.")

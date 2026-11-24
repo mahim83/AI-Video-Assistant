@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 # leaves an existing table alone, so they're added here on startup.
 ADDED_COLUMNS = {
     "access_requests": {"name": "TEXT", "reason": "TEXT"},
+    "users": {"name": "TEXT"},
 }
 
 

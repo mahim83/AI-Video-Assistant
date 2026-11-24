@@ -75,6 +75,11 @@ def save_meeting(space: UserSpace, result: dict, source: str) -> str:
     return path
 
 
+def delete_user_space(space: UserSpace):
+    """Delete everything a user has on disk: meetings, search indexes and work files."""
+    shutil.rmtree(space.root, ignore_errors=True)
+
+
 def list_meetings(space: UserSpace) -> list:
     if not os.path.isdir(space.meetings_dir):
         return []

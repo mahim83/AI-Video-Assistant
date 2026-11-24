@@ -166,4 +166,7 @@ def require_user() -> User:
     if st.session_state.get("_signed_in_as") != user.id:
         st.session_state["_signed_in_as"] = user.id
         db.audit("login", user)
+        if default_name:
+            # So the admin sees names for people who signed up before names were kept.
+            users.remember_name(user.email, default_name)
     return user
