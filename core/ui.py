@@ -194,18 +194,18 @@ SIGNED_OUT_CSS = """
 .st-key-signedout .ava-button-link { margin-top: .75rem; }
 
 /* Primary actions on the signed-out pages. */
-:is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-request_access, .st-key-request_check, .st-key-register_submit, .st-key-login_submit, .st-key-er_submit, .st-key-verify_submit, .st-key-reset_submit, .st-key-reset_start_submit) button {
+:is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-register_submit, .st-key-login_submit, .st-key-er_submit, .st-key-verify_submit, .st-key-reset_submit, .st-key-reset_start_submit) button {
   width: auto; min-width: 16rem; min-height: 3rem; padding: 0 1.25rem;
   background: var(--ava-fill); border-color: var(--ava-fill); color: #fff;
 }
 :is(.st-key-google_signin, .st-key-google_register) button { padding-left: .75rem; }
-:is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-request_access, .st-key-request_check, .st-key-register_submit, .st-key-login_submit, .st-key-er_submit, .st-key-verify_submit, .st-key-reset_submit, .st-key-reset_start_submit) button:hover {
+:is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-register_submit, .st-key-login_submit, .st-key-er_submit, .st-key-verify_submit, .st-key-reset_submit, .st-key-reset_start_submit) button:hover {
   background: var(--ava-fill-strong); border-color: var(--ava-fill-strong); color: #fff;
 }
-:is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-request_access, .st-key-request_check, .st-key-register_submit, .st-key-login_submit, .st-key-er_submit, .st-key-verify_submit, .st-key-reset_submit, .st-key-reset_start_submit) button:focus-visible {
+:is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-register_submit, .st-key-login_submit, .st-key-er_submit, .st-key-verify_submit, .st-key-reset_submit, .st-key-reset_start_submit) button:focus-visible {
   outline: 2px solid var(--ava-accent); outline-offset: 3px;
 }
-:is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-request_access, .st-key-request_check, .st-key-register_submit, .st-key-login_submit, .st-key-er_submit, .st-key-verify_submit, .st-key-reset_submit, .st-key-reset_start_submit) button p {
+:is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-register_submit, .st-key-login_submit, .st-key-er_submit, .st-key-verify_submit, .st-key-reset_submit, .st-key-reset_start_submit) button p {
   font-size: 1rem; font-weight: 600;
 }
 
@@ -470,7 +470,7 @@ def _landing_sections(settings) -> str:
          "Not other users. Each account has its own private space, so nobody else using the app can "
          "see or search your meetings."),
         ("Does it cost anything?",
-         f"Not for approved users. Each account can process {settings.videos_per_day} recordings "
+         f"No. Each account can process {settings.videos_per_day} recordings "
          f"and {settings.audio_minutes_per_day} minutes of audio, and ask {settings.questions_per_day} "
          "questions a day. Limits reset at 00:00 UTC."),
         ("Which languages work?",
@@ -480,8 +480,9 @@ def _landing_sections(settings) -> str:
          "soon as the transcript is ready. Summaries and answers are written by OpenAI."),
         ("Can I use YouTube links?", youtube),
         ("How do I get access?",
-         "Use Sign up at the top of this page, with Google or your email. The admin approves new accounts."
-         if settings.signup_mode == "request" else
+         "Use Sign up at the top of this page, with Google or your email. You can start as soon as "
+         "your account is created."
+         if settings.signup_mode == "open" else
          "Ask the person who runs this app to add your Google account, then sign in."),
     ]
     step_html = "".join(f'<div>{_icon(i)}<h3>{t}</h3><p>{d}</p></div>' for i, t, d in steps)
@@ -568,7 +569,7 @@ def _signin_panel(settings, email_ok: bool):
     if email_ok:
         _or("or sign in with email")
         _email_sign_in_form()
-    if settings.signup_mode == "request":
+    if settings.signup_mode == "open":
         _note(f"Don't have an account? {_link(REGISTER_HREF, 'Sign up')}")
     else:
         _note("Accounts are by invitation.")
@@ -577,7 +578,7 @@ def _signin_panel(settings, email_ok: bool):
 def _signup_panel(settings, email_ok: bool):
     from core import local_auth
     from core.users import NAME_MAX, REASON_MAX
-    if settings.signup_mode != "request":
+    if settings.signup_mode != "open":
         st.markdown('<p class="ava-tab-lede">Accounts are by invitation. Ask the person who runs '
                     "this app to add your account, then sign in.</p>", unsafe_allow_html=True)
         _note(f"Already registered? {_link(SIGNIN_HREF, 'Sign in')}")
@@ -650,7 +651,7 @@ def home_page():
     """The front page: what the app does. Sign in and Sign up are in the top bar."""
     from core.settings import get_settings
     settings = get_settings()
-    signup = settings.signup_mode == "request"
+    signup = settings.signup_mode == "open"
     how = ("Paste a YouTube link or upload a recording." if settings.enable_youtube
            else "Upload a recording of a meeting, lecture or video.")
     st.markdown(SIGNED_OUT_CSS, unsafe_allow_html=True)
@@ -677,7 +678,7 @@ def sign_in_page():
     from core.settings import get_settings
     settings = get_settings()
     st.markdown(SIGNED_OUT_CSS, unsafe_allow_html=True)
-    _top_bar("signin", settings.signup_mode == "request")
+    _top_bar("signin", settings.signup_mode == "open")
     with st.container(key="signin_box"):
         _header("Sign in.", "Use your Google account or the email and password you registered with."
                 if notify.enabled() else "Use the Google account you registered with.", brand=False)
@@ -692,12 +693,10 @@ def register_page():
     settings = get_settings()
     email_ok = notify.enabled()
     st.markdown(SIGNED_OUT_CSS, unsafe_allow_html=True)
-    _top_bar("signup", settings.signup_mode == "request")
+    _top_bar("signup", settings.signup_mode == "open")
     with st.container(key="signin_box"):
-        if settings.signup_mode == "request":
-            last = ("You'll get an email as soon as you're approved."
-                    if email_ok else "Sign in again once you're approved.")
-            lede = f"New accounts are approved by the admin before they can be used. {last}"
+        if settings.signup_mode == "open":
+            lede = "Sign up with Google or your email, and start using the app straight away."
         else:
             lede = "Accounts on AI Video Assistant are by invitation."
         _header("Create your account.", lede, brand=False)
@@ -710,7 +709,7 @@ def reset_page():
     from core import local_auth
     from core.settings import get_settings
     st.markdown(SIGNED_OUT_CSS, unsafe_allow_html=True)
-    _top_bar("reset", get_settings().signup_mode == "request")
+    _top_bar("reset", get_settings().signup_mode == "open")
     with st.container(key="signedout"):
         if email := st.session_state.get("_reset_email"):
             who = html.escape(email, quote=False)
@@ -754,47 +753,35 @@ def reset_page():
         _note(f"Signed in with Google? Google manages that password. {_link(SIGNIN_HREF, 'Back to sign in')}.")
 
 
-def request_page(email: str, status, on_submit, default_name: str = "", error: str = None,
-                 signout_href: str = None):
+def register_google_page(email: str, default_name: str = "", signout_href: str = None):
     """
-    For a verified account that isn't on the list yet: the registration form
-    (Google accounts), or "waiting for approval". on_submit(name, reason)
-    records the registration.
+    The one-time form after a first Google sign-in. Returns (name, reason)
+    once it's filled in properly, otherwise None.
     """
-    from core import notify
     from core.users import NAME_MAX, REASON_MAX
     who = html.escape(email, quote=False)
     st.markdown(SIGNED_OUT_CSS, unsafe_allow_html=True)
     with st.container(key="signedout"):
-        if status == "pending":
-            then = (f"You'll get an email at {who} as soon as it's approved."
-                    if notify.enabled() else "You can use the app as soon as it's approved.")
-            _header("Registration received.",
-                    f"Your account for {who} is waiting for the admin's approval. {then}", wide=True)
-            st.button("Check again", key="request_check")
-        else:
-            _header("Complete your registration.",
-                    f"You're signed in as {who}. Tell the admin who you are, "
-                    "then submit your registration.", wide=True)
-            with st.form("register_form", border=False):
-                name = st.text_input("Full name", value=default_name or "", max_chars=NAME_MAX, key="reg_name")
-                reason = st.text_area("How will you use AI Video Assistant? (optional)", max_chars=REASON_MAX,
-                                      key="reg_reason", height=90,
-                                      placeholder="For example: summarising my college lectures")
-                agree = st.checkbox("I understand that my recordings are transcribed by Deepgram or Sarvam "
-                                    "and summarised by OpenAI.", key="reg_agree")
-                submitted = st.form_submit_button("Submit registration", key="register_submit", type="primary")
-            if submitted:
-                if not name.strip():
-                    st.error("Enter your name.")
-                elif not agree:
-                    st.error("Tick the box to confirm you understand how recordings are processed.")
-                else:
-                    on_submit(name, reason)
-                    st.rerun()
-        if error:
-            st.error(error)
+        _header("Finish creating your account.",
+                f"You're signed in as {who}. One step left, and then you can start using the app.",
+                wide=True)
+        with st.form("register_form", border=False):
+            name = st.text_input("Full name", value=default_name or "", max_chars=NAME_MAX, key="reg_name")
+            reason = st.text_area("How will you use AI Video Assistant? (optional)", max_chars=REASON_MAX,
+                                  key="reg_reason", height=90,
+                                  placeholder="For example: summarising my college lectures")
+            agree = st.checkbox("I understand that my recordings are transcribed by Deepgram or Sarvam "
+                                "and summarised by OpenAI.", key="reg_agree")
+            submitted = st.form_submit_button("Create account", key="register_submit", type="primary")
+        if submitted:
+            if not name.strip():
+                st.error("Enter your name.")
+            elif not agree:
+                st.error("Tick the box to confirm you understand how recordings are processed.")
+            else:
+                return name, reason
         _signout_control(signout_href, key="switch_account_plain")
+    return None
 
 
 def denied_page(message: str, signout_href: str = None):

@@ -11,8 +11,8 @@ Email + password accounts, alongside Google sign-in.
   trades it at /local-auth/complete (server.py) for an HttpOnly session
   cookie; only SHA-256 hashes of tokens and codes are stored.
 
-Access is still decided by core.users: a new account must be approved by an
-admin, exactly like a Google account.
+Access is still decided by core.users: a new account is registered there as
+it's created, exactly like a Google account, and an admin can revoke it.
 """
 import base64
 import hashlib
@@ -23,7 +23,7 @@ import secrets
 import time
 
 from core import db, notify
-from core.errors import UserFacingError
+from core.errors import AccessDenied, UserFacingError
 from core.users import EMAIL_RE, NAME_MAX, REASON_MAX, _clean, normalize_email
 
 log = logging.getLogger(__name__)
@@ -180,7 +180,7 @@ def start_registration(name: str, email: str, password: str, reason: str = ""):
 
 
 def finish_registration(email: str, code: str) -> str:
-    """Verify the code, create the account and its access request, and return a login token."""
+    """Verify the code, create the account, register it, and return a login token."""
     from core import users
     email = normalize_email(email)
     _use_code(email, "register", code)
@@ -193,17 +193,19 @@ def finish_registration(email: str, code: str) -> str:
                     "VALUES (?, ?, ?, ?)", (email, row["name"], row["password_hash"], time.time()))
         con.execute("DELETE FROM pending_registrations WHERE email = ?", (email,))
     db.audit("account_created", email=email, detail="email and password")
-    # The access request comes with the account, so the admin can approve it
-    # straight away. Someone already invited simply gets in.
+    # Registered with the account, so they can start at once and the admins
+    # hear about it. Someone already invited simply gets in. A revoked email
+    # (or SIGNUP_MODE=invite) still gets its account, but signing in shows
+    # the no-access page.
     try:
         users.authorize(email, True)
     except users.NotInvited:
         try:
-            users.request_access(email, name=row["name"], reason=row["reason"])
-        except ValueError:
-            # Requests are full right now; the account still exists, and the
-            # request form appears when they sign in.
-            log.warning("access request not recorded for new account %s", email)
+            users.register(email, name=row["name"], reason=row["reason"], method="email")
+        except AccessDenied:
+            pass
+    except AccessDenied:
+        pass
     except Exception:
         log.exception("checking access for new account %s failed", email)
     return _new_login_token(email)

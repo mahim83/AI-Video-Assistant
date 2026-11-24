@@ -2,7 +2,7 @@
 
 Turn a YouTube video or an audio/video file into a **transcript**, a **title and summary**, and a **chat** where you ask questions about what was said.
 
-**Try it live: [ai-video-assistant.duckdns.org](https://ai-video-assistant.duckdns.org)**. Sign up with Google or your email; new accounts are approved by the admin, and you get an email when yours is ready. On the live site, upload a file: YouTube links work when you run the app on your own computer.
+**Try it live: [ai-video-assistant.duckdns.org](https://ai-video-assistant.duckdns.org)**. Sign up with Google or your email and start right away. On the live site, upload a file: YouTube links work when you run the app on your own computer.
 
 - **Transcribe** English with Deepgram, Hindi-English (Hinglish) with Sarvam, or offline with Whisper.
 - **Summarize** the recording into bullet points with OpenAI.
@@ -10,7 +10,7 @@ Turn a YouTube video or an audio/video file into a **transcript**, a **title and
 - **Measured**: retrieval and answer quality are evaluated with a retrieval benchmark and RAGAS. See [Evaluation](#evaluation).
 - **Keep** your meetings: reopen them later, download the transcript, or delete them with all their data.
 - Use it as a **web app** (Streamlit) or from the **terminal**.
-- **Deploy** it for others: Google or email sign-in, accounts approved by an admin, admin and user roles, a private space per user, quotas and guardrails. See [DEPLOY.md](DEPLOY.md), or [DEPLOY-AWS.md](DEPLOY-AWS.md) for the AWS setup the live site uses.
+- **Deploy** it for others: Google or email sign-in, open sign-up with an email to the admin for each new account (or invite-only), admin and user roles, a private space per user, quotas and guardrails. See [DEPLOY.md](DEPLOY.md), or [DEPLOY-AWS.md](DEPLOY-AWS.md) for the AWS setup the live site uses.
 
 ## How it works
 
@@ -225,9 +225,9 @@ All settings live in `.env`. The template is `.env.example`.
 | `AUTH_MODE` | No | `oidc` | `oidc` for Google sign-in, `off` for local use only. |
 | `ADMIN_EMAILS` | With sign-in | | Comma-separated admin emails. Admins invite users in the app. |
 | `ALLOWED_EMAILS` | No | | Comma-separated emails allowed as regular users without an invite. |
-| `SMTP_USER`, `SMTP_PASSWORD` | No | | Gmail address and app password for sending email: admins hear about new registrations, people hear when they're approved, and email + password accounts get their verification and reset codes. Off until both are set, and then only Google sign-in is offered. `SMTP_HOST`/`SMTP_PORT` default to Gmail (465). |
-| `NOTIFY_EMAILS` | No | `ADMIN_EMAILS` | Who gets the access-request emails. |
-| `SIGNUP_MODE` | No | `request` | `request`: a new Google account can ask for access, and an admin approves it on the Admin page. `invite`: only emails an admin added can sign in. |
+| `SMTP_USER`, `SMTP_PASSWORD` | No | | Gmail address and app password for sending email: admins hear about new registrations, people an admin invites hear how to sign in, and email + password accounts get their verification and reset codes. Off until both are set, and then only Google sign-in is offered. `SMTP_HOST`/`SMTP_PORT` default to Gmail (465). |
+| `NOTIFY_EMAILS` | No | `ADMIN_EMAILS` | Who gets the new-registration emails. |
+| `SIGNUP_MODE` | No | `open` | `open`: anyone with a verified Google account or email can sign up and use the app at once; admins get an email for each registration and can revoke access on the Admin page. `invite`: only emails an admin added can sign in. |
 | `DATA_DIR` | No | `data` | Where meetings, indexes, users and the audit log are stored. |
 | `ENABLE_WHISPER` | No | `true` | Offer the Whisper engine. The server image turns it off. |
 | `ENABLE_YOUTUBE` | No | `true` | Offer YouTube links. Set to `false` on a cloud server, which YouTube blocks; the app then only accepts uploads. |
@@ -244,7 +244,7 @@ Everything lives under `data/` (or `DATA_DIR`), with one folder per user. The fo
 | `data/users/<id>/meetings/` | One JSON file per meeting: title, transcript, summary, source, date, index name. | No, these are the meetings. Use **Delete meeting** instead. |
 | `data/users/<id>/vector_db/` | The Chroma search indexes (embeddings), one collection per meeting. | Yes, with the app stopped. A meeting's index is rebuilt from its transcript when it is reopened. |
 | `data/users/<id>/work/` | Audio while a video is processed. Deleted when processing ends. | Yes, with the app stopped. |
-| `data/app.db` | Invited users, usage counts for quotas, and the audit log. | No when deployed: it holds the invite list. |
+| `data/app.db` | Users, revoked emails, usage counts for quotas, and the audit log. | No when deployed: it holds the user list. |
 
 - A meeting takes about 0.5 MB per hour of video, because audio is not kept.
 - Chat messages are not saved. They disappear when you load another meeting, clear the screen or close the app.
@@ -363,7 +363,7 @@ AI Video Assistant/
 ├── check_setup.py          Checks keys, FFmpeg and the cloud services
 ├── core/
 │   ├── auth.py             Google sign-in (st.login) and the invite check on every rerun
-│   ├── users.py            Invite list, roles, adding and removing users
+│   ├── users.py            Sign-up, roles, adding and revoking users
 │   ├── guardrails.py       Input checks, quotas, rate limits, job slots, answer and error cleanup
 │   ├── storage.py          Per-user folders: save, list, open and delete meetings
 │   ├── db.py               SQLite: users, usage counts, audit log

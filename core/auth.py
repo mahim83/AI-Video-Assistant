@@ -6,8 +6,8 @@ Sign-in for the web app, two ways:
 - email and password (core/local_auth.py), whose session lives in an
   HttpOnly cookie set by server.py.
 
-Either way the identity is checked against the invite list on every rerun,
-so access granted or revoked by an admin applies at the user's next click.
+Either way the identity is checked against the user list on every rerun, so
+access revoked by an admin applies at the user's next click.
 """
 import time
 
@@ -81,11 +81,11 @@ def _deny(email, message: str):
     st.stop()
 
 
-def _submit_request(email: str, sub, name: str, reason: str):
+def _register(email: str, sub, name: str = None, reason: str = None, method: str = "Google"):
     try:
-        users.request_access(email, sub, name=name, reason=reason)
-    except ValueError as e:
-        st.session_state["_request_error"] = str(e)
+        return users.register(email, sub, name=name, reason=reason, method=method)
+    except AccessDenied as e:
+        _deny(email, str(e))
 
 
 def _signed_out_pages():
@@ -146,19 +146,20 @@ def require_user() -> User:
     try:
         user = authorize(email, verified, sub)
     except NotInvited as e:
-        if settings.signup_mode != "request":
+        if settings.signup_mode != "open":
             _deny(email, str(e))
-        status = users.request_status(e.email)
-        if status == "rejected":
-            _deny(email, "Your request to use this app was declined.")
-        ui.request_page(
-            e.email, status,
-            on_submit=lambda name, reason: _submit_request(e.email, sub, name, reason),
-            default_name=default_name,
-            error=st.session_state.pop("_request_error", None),
-            signout_href=sign_out_href(),
-        )
-        st.stop()
+        if signed_in_with_password():
+            # Email accounts agreed to how recordings are processed when they
+            # signed up; this catches accounts made before sign-up was open.
+            user = _register(e.email, sub, name=default_name, method="email")
+        else:
+            # First Google sign-in: one short form, then straight in.
+            form = ui.register_google_page(e.email, default_name=default_name,
+                                           signout_href=sign_out_href())
+            if form is None:
+                st.stop()
+            _register(e.email, sub, name=form[0], reason=form[1])
+            st.rerun()
     except AccessDenied as e:
         _deny(email, str(e))
 

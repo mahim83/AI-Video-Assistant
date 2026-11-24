@@ -29,40 +29,28 @@ def configure(monkeypatch):
 
 
 def test_nothing_sent_without_smtp(outbox):
-    users.request_access("newcomer@example.com")
+    users.register("newcomer@example.com")
     assert outbox == [] and not notify.enabled()
 
 
-def test_admin_hears_about_requests_and_user_about_approval(monkeypatch, outbox, owner):
+def test_only_the_admin_hears_about_a_registration(monkeypatch, outbox):
     configure(monkeypatch)
     assert get_settings().smtp_password == "abcdefghijklmnop"   # spaces removed
 
-    users.request_access("newcomer@example.com")
+    users.register("newcomer@example.com", name="New Comer", reason="lectures")
+    assert len(outbox) == 1                  # nothing to the newcomer: there's nothing to approve
     to, subject, body = outbox[-1]
     assert to == ["owner@example.com"]
-    assert "newcomer@example.com" in subject
-    assert "https://video.example.com" in body
-
-    users.approve_request(owner, "newcomer@example.com")
-    to, subject, body = outbox[-1]
-    assert to == ["newcomer@example.com"]
-    assert subject == "You can now use AI Video Assistant"
-    assert "approved" in body and "https://video.example.com/?page=signin" in body
-    assert "Sign in with Google" in body     # no password account: told to use Google
+    assert subject == "New registration: newcomer@example.com"
+    assert "New Comer (newcomer@example.com)" in body and "Google account" in body
+    assert "lectures" in body
+    assert "revoke" in body and "https://video.example.com" in body
 
 
-def test_approval_email_greets_by_name_and_says_how_to_sign_in(monkeypatch, outbox, owner):
+def test_registration_email_says_how_they_signed_up(monkeypatch, outbox):
     configure(monkeypatch)
-    from core import db, local_auth
-    with db.connect() as con:
-        con.execute("INSERT INTO local_accounts (email, name, password_hash, created_at) VALUES (?, ?, ?, 0)",
-                    ("asha@example.com", "Asha Rao", local_auth.hash_password("river stone lantern")))
-    users.request_access("asha@example.com", name="Asha Rao")
-    users.approve_request(owner, "asha@example.com")
-    to, subject, body = outbox[-1]
-    assert to == ["asha@example.com"]
-    assert body.startswith("Hi Asha Rao,")
-    assert "email and password you registered with" in body and "Google" not in body
+    users.register("asha@example.com", name="Asha Rao", method="email")
+    assert "an email and password" in outbox[-1][2]
 
 
 def test_invite_emails_only_new_users(monkeypatch, outbox, owner):
@@ -79,10 +67,10 @@ def test_invite_emails_only_new_users(monkeypatch, outbox, owner):
     assert len(outbox) == sent
 
 
-def test_repeat_request_sends_no_second_email(monkeypatch, outbox):
+def test_repeat_registration_sends_no_second_email(monkeypatch, outbox):
     configure(monkeypatch)
-    users.request_access("newcomer@example.com")
-    users.request_access("newcomer@example.com")
+    users.register("newcomer@example.com")
+    users.register("newcomer@example.com")
     assert len(outbox) == 1
 
 

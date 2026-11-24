@@ -66,46 +66,65 @@ def test_admin_guard_rails(owner):
         users.remove_user(owner, "nobody@example.com")
 
 
-def test_access_requests(owner, friend):
-    users.request_access("New@Example.com", sub="g-1")
-    users.request_access("new@example.com")          # a second click changes nothing
-    assert users.request_status("new@example.com") == "pending"
-    assert [r["email"] for r in users.list_requests(owner)] == ["new@example.com"]
-    assert users.pending_request_count() == 1
-
-    with pytest.raises(PermissionError):
-        users.approve_request(friend, "new@example.com")
-    users.approve_request(owner, "new@example.com")
-    assert users.authorize("new@example.com", True).role == "user"
-    assert users.request_status("new@example.com") is None
+def test_registering_lets_people_straight_in():
+    with pytest.raises(users.NotInvited):
+        users.authorize("new@example.com", True)
+    user = users.register("New@Example.com", sub="g-1", name="New Comer")
+    assert (user.email, user.role) == ("new@example.com", "user")
+    assert users.authorize("new@example.com", True, sub="g-1").role == "user"
+    users.register("new@example.com", sub="g-1")       # a second click changes nothing
+    actions = [r["action"] for r in db.recent_audit()]
+    assert actions.count("user_registered") == 1
 
 
-def test_rejection_sticks(owner):
-    users.request_access("pest@example.com")
-    users.reject_request(owner, "pest@example.com")
-    users.request_access("pest@example.com")          # asking again doesn't reopen it
-    assert users.request_status("pest@example.com") == "rejected"
-    assert users.list_requests(owner) == []
-    with pytest.raises(ValueError):
-        users.approve_request(owner, "pest@example.com")
-    # An admin can still let them in directly.
+def test_revoked_user_cannot_register_again(owner):
+    users.register("pest@example.com")
+    users.remove_user(owner, "pest@example.com")
+    with pytest.raises(AccessDenied, match="revoked"):
+        users.authorize("pest@example.com", True)
+    with pytest.raises(AccessDenied, match="revoked"):
+        users.register("pest@example.com")
+    # An admin can let them back in.
     users.add_user(owner, "pest@example.com")
-    assert users.request_status("pest@example.com") is None
+    assert users.authorize("pest@example.com", True).role == "user"
+    assert not users.is_revoked("pest@example.com")
 
 
-def test_pending_requests_are_capped(monkeypatch):
-    monkeypatch.setattr(users, "MAX_PENDING_REQUESTS", 2)
-    users.request_access("a@example.com")
-    users.request_access("b@example.com")
-    with pytest.raises(ValueError, match="new requests"):
-        users.request_access("c@example.com")
+def test_old_requests_carry_over():
+    """Rows from the approve-first sign-up: a rejection still keeps someone out."""
+    with db.connect() as con:
+        con.execute("INSERT INTO access_requests (email, status, requested_at) VALUES "
+                    "('waiting@example.com', 'pending', 0), ('declined@example.com', 'rejected', 0)")
+    users.register("waiting@example.com")
+    with db.connect() as con:
+        assert con.execute("SELECT COUNT(*) FROM access_requests WHERE email = 'waiting@example.com'"
+                           ).fetchone()[0] == 0
+    with pytest.raises(AccessDenied, match="revoked"):
+        users.register("declined@example.com")
+
+
+def test_invite_mode_refuses_registration(monkeypatch):
+    from core.settings import get_settings
+    monkeypatch.setenv("SIGNUP_MODE", "invite")
+    get_settings.cache_clear()
+    with pytest.raises(AccessDenied, match="invitation"):
+        users.register("new@example.com")
+
+
+def test_old_request_setting_means_open(monkeypatch):
+    from core.settings import get_settings
+    monkeypatch.setenv("SIGNUP_MODE", "request")
+    get_settings.cache_clear()
+    assert get_settings().signup_mode == "open"
 
 
 def test_list_users_shows_sources(owner):
     users.add_user(owner, "added@example.com")
+    users.register("joined@example.com")
     sources = {r["email"]: r["source"] for r in users.list_users(owner)}
     assert sources == {
         "owner@example.com": "ADMIN_EMAILS",
         "friend@example.com": "ALLOWED_EMAILS",
         "added@example.com": "app",
+        "joined@example.com": "sign-up",
     }

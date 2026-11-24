@@ -80,47 +80,49 @@ def test_denied_logins_are_logged_once_per_hour(monkeypatch):
     assert [r["action"] for r in db.recent_audit()].count("login_denied") == 1
 
 
-def test_request_access_flow(monkeypatch):
-    # A new Google account fills in the registration form...
-    at = run(monkeypatch, "newcomer@example.com")
+def test_google_sign_up_goes_straight_in(monkeypatch):
+    outbox = enable_email(monkeypatch)
+    # A new Google account fills in the one-time form...
+    at = run(monkeypatch, "newcomer@example.com", sub="google-333")
     assert not at.sidebar.radio
-    assert "Complete your registration." in texts(at)
+    assert "Finish creating your account." in texts(at)
     at.text_input(key="reg_name").input("New Comer")
     at.button(key="register_submit").click().run()
     assert "Tick the box" in texts(at)                 # consent is required
+    assert not users.list_users(users.authorize("owner@example.com", True))[2:]
     at.checkbox(key="reg_agree").check()
     at.text_area(key="reg_reason").input("Summarising my lectures")
     at.button(key="register_submit").click().run()
-    assert "Registration received." in texts(at)
-    assert not at.sidebar.radio
-    owner = users.authorize("owner@example.com", True)
-    assert users.list_requests(owner)[0]["name"] == "New Comer"
 
-    # ...the admin sees it waiting and approves it...
-    admin = run(monkeypatch, "owner@example.com")
-    assert "1 access request waiting" in " ".join(c.value for c in admin.sidebar.caption)
-    admin.sidebar.radio[0].set_value("Admin").run()
-    admin.button(key=f"approve_{users.user_id_for('newcomer@example.com')}").click().run()
-    assert not admin.exception
-
-    # ...and the newcomer is in, as a regular user.
-    at = run(monkeypatch, "newcomer@example.com")
+    # ...and is in at once, as a regular user, with no approval step.
+    assert not at.exception
     assert at.sidebar.radio[0].options == ["New video", "Saved meetings"]
+    # The admin gets one email about it.
+    assert [(to, subject) for to, subject, _ in outbox] == [
+        (["owner@example.com"], "New registration: newcomer@example.com")]
+
+    # The admin page has nothing to approve, and the newcomer is listed.
+    admin = run(monkeypatch, "owner@example.com")
+    admin.sidebar.radio[0].set_value("Admin").run()
+    assert not admin.exception
+    assert "Approve" not in [b.label for b in admin.button]
+    assert "Anyone can sign up" in texts(admin)
 
 
-def test_rejected_request_sees_no_access(monkeypatch):
-    users.request_access("newcomer@example.com", name="New Comer")
+def test_revoked_user_sees_no_access(monkeypatch):
+    users.register("newcomer@example.com", name="New Comer")
     owner = users.authorize("owner@example.com", True)
-    users.reject_request(owner, "newcomer@example.com")
+    users.remove_user(owner, "newcomer@example.com")
     at = run(monkeypatch, "newcomer@example.com")
-    assert "declined" in texts(at)
+    assert "revoked" in texts(at)
     assert "register_submit" not in [b.key for b in at.button]
+    assert not at.sidebar.radio
 
 
-def test_unverified_email_cannot_request(monkeypatch):
+def test_unverified_email_cannot_register(monkeypatch):
     at = run(monkeypatch, "newcomer@example.com", verified=False)
     assert "isn't verified" in texts(at)
-    assert "Complete your registration." not in texts(at)
+    assert "Finish creating your account." not in texts(at)
 
 
 def test_front_page_has_no_form(monkeypatch):
@@ -188,18 +190,15 @@ def test_register_page_with_email(monkeypatch):
     at.text_input(key="verify_code").input(code)
     at.button(key="verify_submit").click().run()
     assert "/local-auth/complete?token=" in texts(at)
-    owner = users.authorize("owner@example.com", True)
-    assert [r["email"] for r in users.list_requests(owner)] == ["asha@example.com"]
+    assert users.authorize("asha@example.com", True).role == "user"
 
 
 def test_email_account_session_signs_in(monkeypatch):
     from core import local_auth
     outbox = enable_email(monkeypatch)
-    owner = users.authorize("owner@example.com", True)
     local_auth.start_registration("Asha Rao", "asha@example.com", "river stone lantern")
     code = outbox[-1][1].split()[-1]
     token = local_auth.finish_registration("asha@example.com", code)
-    users.approve_request(owner, "asha@example.com")
     session, _ = local_auth.redeem_login_token(token)
 
     at = run(monkeypatch, session_cookie=session)

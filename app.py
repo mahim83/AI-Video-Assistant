@@ -41,7 +41,7 @@ def md(text: str) -> str:
 
 settings = get_settings()
 # Stops the script here, showing the sign-in or no-access page, unless the
-# visitor is signed in and on the invite list.
+# visitor is signed in and allowed in.
 user = require_user()
 # Every read, write and delete below goes through this user's own folder.
 space = storage.user_space(user.id)
@@ -141,8 +141,6 @@ def _account_box():
         st.caption("Sign-in is off. Local use on this computer only.")
         return
     st.caption(f"Signed in as {user.email}" + (" (admin)" if user.is_admin else ""))
-    if user.is_admin and (waiting := users.pending_request_count()):
-        st.caption(f"{waiting} access request{'s' if waiting != 1 else ''} waiting. Open Admin to review.")
     if not user.is_admin:
         u = guardrails.usage_summary(user)
         st.caption(
@@ -162,27 +160,10 @@ def _account_box():
 def _admin_page():
     st.markdown("## Admin")
 
-    if settings.signup_mode == "request":
-        st.markdown("#### Access requests")
-        pending = users.list_requests(user)
-        if not pending:
-            st.caption("No requests waiting. People who sign in with Google and aren't on the "
-                       "list can request access; their requests appear here.")
-        for r in pending:
-            key = users.user_id_for(r["email"])
-            c1, c2, c3 = st.columns([4, 1, 1], vertical_alignment="center")
-            c1.text(r["email"])
-            c1.caption("Requested " + datetime.fromtimestamp(r["requested_at"], timezone.utc)
-                       .strftime("%d %b %Y, %H:%M UTC"))
-            if c2.button("Approve", key=f"approve_{key}", type="primary", use_container_width=True):
-                users.approve_request(user, r["email"])
-                told = " and has been emailed" if notify.enabled() else ""
-                st.toast(f"{r['email']} can now use the app{told}", icon=":material/check_circle:")
-                st.rerun()
-            if c3.button("Reject", key=f"reject_{key}", use_container_width=True):
-                users.reject_request(user, r["email"])
-                st.toast(f"Rejected {r['email']}", icon=":material/block:")
-                st.rerun()
+    if settings.signup_mode == "open":
+        st.caption("Anyone can sign up and use the app straight away"
+                   + (", and you get an email for each new registration." if notify.enabled() else ".")
+                   + " Revoke anyone who looks suspicious; they can't sign up again until you add them back.")
 
     st.markdown("#### Invite a user")
     with st.form("add_user", clear_on_submit=True):
@@ -206,7 +187,8 @@ def _admin_page():
         if c2.button("Revoke", use_container_width=True):
             try:
                 users.remove_user(user, target)
-                st.success(f"{target} can no longer sign in. Their meetings stay on disk.")
+                st.success(f"{target} can no longer sign in or sign up again. Their meetings stay on "
+                           "disk. Add them under Invite a user to let them back in.")
                 rows = users.list_users(user)
             except (ValueError, PermissionError) as e:
                 st.error(str(e))

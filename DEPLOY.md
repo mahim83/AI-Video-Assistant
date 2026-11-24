@@ -56,8 +56,9 @@ sudo ufw enable
    - Authorized redirect URIs: `https://video.example.com/oauth2callback`.
    - Copy the **client ID** and **client secret**.
 
-Google only confirms who someone is. Who may use the app is decided by your
-invite list (step 6), not by Google.
+Google only confirms who someone is. Who may use the app is decided by the
+app (step 6): by default anyone with a verified email can sign up, and you
+can revoke anyone.
 
 ## 4. Configure the app
 
@@ -101,13 +102,18 @@ The first build takes several minutes because it downloads PyTorch and the
 models. Then open `https://video.example.com`. You should see **Sign in with
 Google**, and after signing in with your admin account, the app.
 
-## 6. Invite people
+## 6. Manage people
+
+With the default `SIGNUP_MODE=open`, anyone with a verified Google account or
+email can sign up and use the app straight away, as a regular user with the
+daily limits. With email set up (SMTP settings), you get an email for each new
+registration, so you can check it. Set `SIGNUP_MODE=invite` to let in only the
+people you add.
 
 In the sidebar, choose **Admin**:
 
-- **Access requests**: anyone who signs in with a verified Google account and isn't on the list can click **Request access** (with the default `SIGNUP_MODE=request`). Your sidebar shows how many are waiting; **Approve** lets them in at their next click, **Reject** keeps them out. Set `SIGNUP_MODE=invite` to turn requests off.
-- **Invite a user**: enter their Google account email and choose a role. They can sign in right away.
-- **Revoke access**: takes effect at their next click. Their meetings stay on disk.
+- **Invite a user**: enter their email and choose a role. They can sign in right away.
+- **Revoke access**: takes effect at their next click, and they can't sign up again with that email. Their meetings stay on disk. Adding them under **Invite a user** lets them back in.
 - **Users and today's usage** and the **Audit log** show who did what. The log records actions (sign-in, processed, opened, deleted), never questions or transcripts.
 
 ## 7. Bring over your existing meetings (optional)

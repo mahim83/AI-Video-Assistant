@@ -49,10 +49,20 @@ def test_registration_needs_the_emailed_code(outbox):
         local_auth.finish_registration("asha@example.com", "000000" if last_code(outbox) != "000000" else "111111")
     token = local_auth.finish_registration("asha@example.com", last_code(outbox))
     assert token
-    # The account comes with an access request for the admin, name and reason included.
+    # The account can be used at once, and the admin is told, name and reason included.
+    assert users.authorize("asha@example.com", True).role == "user"
+    to, subject, body = outbox[-1]
+    assert to == ["owner@example.com"] and "asha@example.com" in subject
+    assert "Asha Rao" in body and "lectures" in body
+
+
+def test_revoked_email_gets_an_account_but_no_access(outbox):
     owner = users.authorize("owner@example.com", True)
-    request = users.list_requests(owner)[0]
-    assert (request["email"], request["name"], request["reason"]) == ("asha@example.com", "Asha Rao", "lectures")
+    users.register("asha@example.com")
+    users.remove_user(owner, "asha@example.com")
+    assert register(outbox)                     # the account is made...
+    with pytest.raises(users.AccessDenied, match="revoked"):
+        users.authorize("asha@example.com", True)   # ...but it can't get in
 
 
 def test_code_stops_working_after_five_wrong_tries(outbox):
@@ -134,7 +144,7 @@ def test_reset_password(outbox):
     assert local_auth.sign_in("asha@example.com", "new harbour morning")
 
 
-def test_upload_gate_accepts_an_approved_email_account(outbox, monkeypatch):
+def test_upload_gate_follows_access(outbox, monkeypatch):
     import asyncio
     from core import upload_gate
 
@@ -156,6 +166,7 @@ def test_upload_gate_accepts_an_approved_email_account(outbox, monkeypatch):
         return sent[0]["status"]
 
     upload_gate._in_flight.clear(); upload_gate._recent.clear()
-    assert put() == 403                      # registered, not yet approved
-    users.approve_request(owner, "asha@example.com")
-    assert put() == 204
+    assert put() == 204                      # usable as soon as it's registered
+    users.remove_user(owner, "asha@example.com")
+    upload_gate._in_flight.clear(); upload_gate._recent.clear()
+    assert put() == 403                      # revoked

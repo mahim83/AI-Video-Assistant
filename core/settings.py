@@ -47,8 +47,9 @@ class Settings:
     admin_emails: frozenset
     # Allowed as regular users. Admins can also add users in the app.
     allowed_emails: frozenset
-    # "request": anyone with a verified Google account can ask for access and
-    # an admin approves. "invite": only emails an admin added get in.
+    # "open": anyone with a verified email can register and use the app at
+    # once; admins get an email and can revoke. "invite": only emails an admin
+    # added get in.
     signup_mode: str
 
     max_video_minutes: int
@@ -86,9 +87,13 @@ def get_settings() -> Settings:
     if auth_mode not in ("oidc", "off"):
         raise RuntimeError(f"AUTH_MODE must be 'oidc' or 'off', got {auth_mode!r}")
 
-    signup_mode = os.getenv("SIGNUP_MODE", "request").strip().lower()
-    if signup_mode not in ("request", "invite"):
-        raise RuntimeError(f"SIGNUP_MODE must be 'request' or 'invite', got {signup_mode!r}")
+    signup_mode = os.getenv("SIGNUP_MODE", "open").strip().lower()
+    # "request" was the approve-first sign-up, since removed; a server whose
+    # .env still says so keeps letting people register.
+    if signup_mode == "request":
+        signup_mode = "open"
+    if signup_mode not in ("open", "invite"):
+        raise RuntimeError(f"SIGNUP_MODE must be 'open' or 'invite', got {signup_mode!r}")
 
     admin_emails = _set("ADMIN_EMAILS")
     domain = os.getenv("DOMAIN", "").strip()
