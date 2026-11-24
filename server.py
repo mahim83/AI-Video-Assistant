@@ -5,7 +5,7 @@ of Streamlit. Start it the usual way:
     streamlit run server.py
 
 - The upload gate (core/upload_gate.py) refuses uploads from anyone who
-  isn't signed in and invited.
+  isn't signed in and allowed in.
 - /local-auth/complete and /local-auth/signout set and clear the session
   cookie for email + password accounts (core/local_auth.py). Streamlit's
   own pages can't set HttpOnly cookies, so a sign-in hands the browser a

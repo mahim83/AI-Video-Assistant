@@ -7,7 +7,7 @@ gate, an anonymous visitor could upload 200 MB files in a loop and run the
 server out of memory.
 
 This ASGI middleware lets an upload through only when the request carries a
-valid Streamlit login cookie for an invited user, and limits each user to one
+valid login cookie for a user who is allowed in, and limits each user to one
 upload at a time and a few per window. It runs in front of Streamlit, so a
 refused upload never reaches memory.
 """
@@ -43,7 +43,7 @@ def _app_origin() -> str:
 
 
 def _user_from_cookie(headers: dict):
-    """The invited user behind a request's login cookie (Google or email account), or None."""
+    """The allowed-in user behind a request's login cookie (Google or email account), or None."""
     from streamlit.web.server import server_util
     from streamlit.web.server.starlette.starlette_app_utils import decode_signed_value
     from streamlit.web.server.starlette.starlette_server_config import USER_COOKIE_NAME

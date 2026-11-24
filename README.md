@@ -223,7 +223,7 @@ All settings live in `.env`. The template is `.env.example`.
 | `YTDLP_BROWSER` | No | | Use a browser's YouTube sign-in. See [YouTube sign-in errors](#youtube-sign-in-errors). |
 | `YTDLP_COOKIES` | No | | Path to exported YouTube cookies. See [YouTube sign-in errors](#youtube-sign-in-errors). |
 | `AUTH_MODE` | No | `oidc` | `oidc` for Google sign-in, `off` for local use only. |
-| `ADMIN_EMAILS` | With sign-in | | Comma-separated admin emails. Admins invite users in the app. |
+| `ADMIN_EMAILS` | With sign-in | | Comma-separated admin emails. Admins can invite and revoke users in the app. |
 | `ALLOWED_EMAILS` | No | | Comma-separated emails allowed as regular users without an invite. |
 | `SMTP_USER`, `SMTP_PASSWORD` | No | | Gmail address and app password for sending email: admins hear about new registrations, people an admin invites hear how to sign in, and email + password accounts get their verification and reset codes. Off until both are set, and then only Google sign-in is offered. `SMTP_HOST`/`SMTP_PORT` default to Gmail (465). |
 | `NOTIFY_EMAILS` | No | `ADMIN_EMAILS` | Who gets the new-registration emails. |
@@ -359,11 +359,16 @@ Public videos usually download without signing in. If YouTube asks you to sign i
 ```text
 AI Video Assistant/
 ├── app.py                  Streamlit web app, including the Admin page
+├── server.py               Server entry point: app.py plus the upload gate and email sign-in routes
 ├── main.py                 Processing pipeline and terminal app
 ├── check_setup.py          Checks keys, FFmpeg and the cloud services
 ├── core/
-│   ├── auth.py             Google sign-in (st.login) and the invite check on every rerun
+│   ├── auth.py             Google and email sign-in, and the access check on every rerun
+│   ├── local_auth.py       Email + password accounts: codes, hashing, lockout, sessions
 │   ├── users.py            Sign-up, roles, adding and revoking users
+│   ├── notify.py           Emails: new registrations to the admin, invites, sign-in codes
+│   ├── ui.py               Look and feel, and the signed-out pages (front page, sign in, sign up)
+│   ├── upload_gate.py      Refuses uploads from anyone not signed in, one upload at a time
 │   ├── guardrails.py       Input checks, quotas, rate limits, job slots, answer and error cleanup
 │   ├── storage.py          Per-user folders: save, list, open and delete meetings
 │   ├── db.py               SQLite: users, usage counts, audit log
@@ -389,6 +394,7 @@ AI Video Assistant/
 ├── Dockerfile              Server image (CPU-only PyTorch, models included)
 ├── docker-compose.yml      App + Caddy
 ├── DEPLOY.md               Step-by-step server deployment
+├── DEPLOY-AWS.md           The AWS setup the live site uses
 ├── .streamlit/config.toml  Keeps the web app on your own computer; upload and XSRF settings
 ├── .streamlit/secrets.toml.example  Template for Google sign-in
 ├── .env.example            Template for your keys and settings
