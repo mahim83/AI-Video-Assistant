@@ -64,3 +64,21 @@ def test_header_injection_is_refused(monkeypatch):
     monkeypatch.setattr(notify.smtplib, "SMTP_SSL", lambda *a, **k: called.append(1))
     notify._send(["x@example.com"], "hi\r\nBcc: victim@example.com", "body")
     assert called == []
+
+
+def test_codes_never_reach_the_log(monkeypatch, caplog):
+    configure(monkeypatch)
+
+    class FakeSMTP:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def ehlo(self): pass
+        def auth(self, *a): pass
+        def auth_plain(self): return ""
+        def send_message(self, msg): pass
+
+    monkeypatch.setattr(notify.smtplib, "SMTP_SSL", FakeSMTP)
+    with caplog.at_level("INFO", logger="core.notify"):
+        notify._send(["x@example.com"], "Your AI Video Assistant code: 328160", "Your code is 328160.")
+    assert "email sent" in caplog.text and "328160" not in caplog.text

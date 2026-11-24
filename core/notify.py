@@ -8,6 +8,7 @@ never holds up the page, and a failure is logged rather than shown. With no
 SMTP_USER/SMTP_PASSWORD set, nothing is sent.
 """
 import logging
+import re
 import smtplib
 import ssl
 import threading
@@ -21,6 +22,14 @@ log = logging.getLogger(__name__)
 def enabled() -> bool:
     s = get_settings()
     return bool(s.smtp_user and s.smtp_password)
+
+
+_DIGITS = re.compile(r"\d{4,}")
+
+
+def _for_log(subject: str) -> str:
+    """The subject without sign-in codes, so the server log never holds one."""
+    return _DIGITS.sub("[code]", subject)
 
 
 def _send(to: list, subject: str, body: str):
@@ -40,12 +49,12 @@ def _send(to: list, subject: str, body: str):
             smtp.user, smtp.password = s.smtp_user, s.smtp_password
             smtp.auth("PLAIN", smtp.auth_plain)
             smtp.send_message(msg)
-        log.info("email sent: %s", subject)
+        log.info("email sent: %s", _for_log(subject))
     except smtplib.SMTPAuthenticationError as e:
         log.error("email failed: the mail server rejected SMTP_USER/SMTP_PASSWORD (%s). "
                   "With Gmail, use an app password of that same account.", e.smtp_code)
     except Exception:
-        log.exception("email failed: %s", subject)
+        log.exception("email failed: %s", _for_log(subject))
 
 
 def send(to, subject: str, body: str):
