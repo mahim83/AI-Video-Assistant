@@ -14,7 +14,7 @@ import streamlit as st
 # Import main first: it calls load_dotenv() *before* importing core/, which
 # transcriber.py depends on (it reads SARVAM_API_KEY at module import time).
 from main import run_pipeline, load_rag_chain, ask_question
-from core import db, guardrails, storage, ui, users
+from core import db, guardrails, notify, storage, ui, users
 from core.auth import require_user, sign_out_href
 from core.retriever import reranker_error
 from core.settings import get_settings
@@ -176,7 +176,8 @@ def _admin_page():
                        .strftime("%d %b %Y, %H:%M UTC"))
             if c2.button("Approve", key=f"approve_{key}", type="primary", use_container_width=True):
                 users.approve_request(user, r["email"])
-                st.toast(f"{r['email']} can now use the app", icon=":material/check_circle:")
+                told = " and has been emailed" if notify.enabled() else ""
+                st.toast(f"{r['email']} can now use the app{told}", icon=":material/check_circle:")
                 st.rerun()
             if c3.button("Reject", key=f"reject_{key}", use_container_width=True):
                 users.reject_request(user, r["email"])
@@ -186,12 +187,14 @@ def _admin_page():
     st.markdown("#### Invite a user")
     with st.form("add_user", clear_on_submit=True):
         c1, c2 = st.columns([3, 1])
-        email = c1.text_input("Google account email")
+        email = c1.text_input("Email")
         role = c2.selectbox("Role", users.ROLES)
         if st.form_submit_button("Add user", type="primary"):
             try:
-                users.add_user(user, email, role)
-                st.success(f"{users.normalize_email(email)} can now sign in as {role}.")
+                is_new = users.add_user(user, email, role, send_invite=True)
+                who = users.normalize_email(email)
+                told = " We've emailed them a link to sign in." if is_new and notify.enabled() else ""
+                st.success(f"{who} can now sign in as {role}.{told}")
             except (ValueError, PermissionError) as e:
                 st.error(str(e))
 

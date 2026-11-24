@@ -46,7 +46,37 @@ def test_admin_hears_about_requests_and_user_about_approval(monkeypatch, outbox,
     users.approve_request(owner, "newcomer@example.com")
     to, subject, body = outbox[-1]
     assert to == ["newcomer@example.com"]
-    assert "approved" in body and "https://video.example.com" in body
+    assert subject == "You can now use AI Video Assistant"
+    assert "approved" in body and "https://video.example.com/?page=signin" in body
+    assert "Sign in with Google" in body     # no password account: told to use Google
+
+
+def test_approval_email_greets_by_name_and_says_how_to_sign_in(monkeypatch, outbox, owner):
+    configure(monkeypatch)
+    from core import db, local_auth
+    with db.connect() as con:
+        con.execute("INSERT INTO local_accounts (email, name, password_hash, created_at) VALUES (?, ?, ?, 0)",
+                    ("asha@example.com", "Asha Rao", local_auth.hash_password("river stone lantern")))
+    users.request_access("asha@example.com", name="Asha Rao")
+    users.approve_request(owner, "asha@example.com")
+    to, subject, body = outbox[-1]
+    assert to == ["asha@example.com"]
+    assert body.startswith("Hi Asha Rao,")
+    assert "email and password you registered with" in body and "Google" not in body
+
+
+def test_invite_emails_only_new_users(monkeypatch, outbox, owner):
+    configure(monkeypatch)
+    assert users.add_user(owner, "friend@example.com", "user", send_invite=True) is True
+    to, subject, body = outbox[-1]
+    assert to == ["friend@example.com"] and subject == "You're invited to AI Video Assistant"
+    assert "https://video.example.com/?page=signin" in body
+
+    sent = len(outbox)
+    users.add_user(owner, "friend@example.com", "admin", send_invite=True)   # a role change
+    assert len(outbox) == sent
+    users.add_user(owner, "quiet@example.com", "user")                       # no invite asked for
+    assert len(outbox) == sent
 
 
 def test_repeat_request_sends_no_second_email(monkeypatch, outbox):

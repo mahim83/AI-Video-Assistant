@@ -122,7 +122,8 @@ def list_users(actor: User) -> list:
     return sorted(rows.values(), key=lambda r: (r["role"] != "admin", r["email"]))
 
 
-def add_user(actor: User, email: str, role: str = "user"):
+def add_user(actor: User, email: str, role: str = "user", send_invite: bool = False):
+    """Give email access. With send_invite, a newly added person is told by email."""
     _require_admin(actor)
     email = normalize_email(email)
     if not EMAIL_RE.fullmatch(email):
@@ -132,6 +133,7 @@ def add_user(actor: User, email: str, role: str = "user"):
     if email in get_settings().admin_emails:
         raise ValueError(f"{email} is already an admin through ADMIN_EMAILS.")
     with db.connect() as con:
+        is_new = con.execute("SELECT 1 FROM users WHERE email = ?", (email,)).fetchone() is None
         con.execute(
             "INSERT INTO users (email, role, added_by, added_at) VALUES (?, ?, ?, ?) "
             "ON CONFLICT(email) DO UPDATE SET role = excluded.role",
@@ -140,6 +142,9 @@ def add_user(actor: User, email: str, role: str = "user"):
         # Adding someone settles any request they had open.
         con.execute("DELETE FROM access_requests WHERE email = ?", (email,))
     db.audit("user_added", actor, detail=f"{email} as {role}")
+    if send_invite and is_new:
+        notify.invited(email, role)
+    return is_new
 
 
 def remove_user(actor: User, email: str):
@@ -223,9 +228,13 @@ def approve_request(actor: User, email: str):
     email = normalize_email(email)
     if request_status(email) != "pending":
         raise ValueError(f"{email} has no pending request.")
+    with db.connect() as con:
+        req = con.execute("SELECT name FROM access_requests WHERE email = ?", (email,)).fetchone()
+        account = con.execute("SELECT name FROM local_accounts WHERE email = ?", (email,)).fetchone()
     add_user(actor, email, "user")   # also clears the request
     db.audit("request_approved", actor, detail=email)
-    notify.access_approved(email)
+    name = (account and account["name"]) or (req and req["name"]) or None
+    notify.access_approved(email, name=name, has_password=account is not None)
 
 
 def reject_request(actor: User, email: str):

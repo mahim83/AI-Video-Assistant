@@ -74,11 +74,44 @@ def new_access_request(email: str, name: str = None, reason: str = None):
     send(sorted(s.notify_emails), f"New registration: {email}", "\n\n".join(lines) + "\n")
 
 
-def access_approved(email: str):
+_WHAT_IT_DOES = ("Upload a recording of a meeting, lecture or video, and you get the full transcript, "
+                 "a short summary, and answers to your questions about it.")
+
+
+def _how_to_sign_in(email: str, has_password: bool) -> str:
+    if has_password:
+        return f"Sign in with the email and password you registered with ({email})."
+    return (f'Choose "Sign in with Google" and use this Google account: {email}. '
+            "Or create a password for this address on the Sign up page.")
+
+
+def access_approved(email: str, name: str = None, has_password: bool = False):
+    """To the person whose request the admin just approved."""
     s = get_settings()
+    greeting = f"Hi {name},\n\n" if name else "Hi,\n\n"
     send(
         email,
         "You can now use AI Video Assistant",
-        "Your request to use AI Video Assistant was approved.\n\n"
-        f"Sign in with this Google account: {s.app_url}\n",
+        f"{greeting}"
+        "Your account on AI Video Assistant has been approved, so you can start using it now.\n\n"
+        f"Sign in here: {s.app_url}/?page=signin\n"
+        f"{_how_to_sign_in(email, has_password)}\n\n"
+        f"{_WHAT_IT_DOES}\n\n"
+        "If you didn't ask for an account, you can ignore this email.\n",
+    )
+
+
+def invited(email: str, role: str):
+    """To someone the admin added directly from the Admin page."""
+    s = get_settings()
+    as_admin = " as an admin" if role == "admin" else ""
+    send(
+        email,
+        "You're invited to AI Video Assistant",
+        "Hi,\n\n"
+        f"You've been given access to AI Video Assistant{as_admin}, so you can start using it now.\n\n"
+        f"Sign in here: {s.app_url}/?page=signin\n"
+        f"{_how_to_sign_in(email, False)}\n\n"
+        f"{_WHAT_IT_DOES}\n\n"
+        "If you weren't expecting this, you can ignore this email.\n",
     )
