@@ -659,10 +659,11 @@ def home_page():
     left, right = st.columns([11, 10], gap="large")
     with right:
         st.markdown(_player(), unsafe_allow_html=True)
+    start = " Sign up free with Google or your email and start straight away." if signup else ""
     with left:
         _header("Ask questions about any video or meeting recording.",
                 f"{how} You get the full transcript, a short summary, "
-                "and answers drawn from what was actually said.", caption=False, follow=True,
+                f"and answers drawn from what was actually said.{start}", caption=False, follow=True,
                 brand=False)
     st.markdown(_landing_sections(settings), unsafe_allow_html=True)
 

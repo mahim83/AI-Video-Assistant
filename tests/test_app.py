@@ -131,6 +131,8 @@ def test_front_page_has_no_form(monkeypatch):
     # The front page explains the app; the forms live on their own pages.
     assert not at.button and not at.text_input
     assert "Ask questions about any video" in texts(at)
+    assert "start straight away" in texts(at)          # open sign-up, no approval
+    assert "approv" not in texts(at)
     # Sign in and Sign up appear once, in the top bar.
     assert texts(at).count('href="?page=signin"') == 1 and texts(at).count('href="?page=register"') == 1
     assert not at.sidebar.radio
