@@ -131,28 +131,25 @@ SIGNED_OUT_CSS = """
    Starts below Streamlit's own toolbar so its menu never covers the buttons. */
 .ava-topbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem;
               margin: 1.5rem 0 3rem 0; padding-bottom: 1.25rem; border-bottom: 1px solid var(--ava-rule); }
-.ava-topnav, .ava-actions { display: flex; align-items: center; gap: .5rem; }
-[data-testid="stMarkdownContainer"] :is(.ava-topnav, .ava-actions) a {
+.ava-topnav { display: flex; align-items: center; gap: .5rem; }
+[data-testid="stMarkdownContainer"] .ava-topnav a {
   display: inline-flex; align-items: center; min-height: 2.5rem; padding: 0 1rem;
   border-radius: .375rem; border: 1px solid transparent; font-size: .9375rem; font-weight: 600;
   text-decoration: none; transition: background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out;
 }
-[data-testid="stMarkdownContainer"] :is(.ava-topnav, .ava-actions) a.ava-top-in {
+[data-testid="stMarkdownContainer"] .ava-topnav a.ava-top-in {
   color: var(--ava-ink); border-color: var(--ava-rule); background: var(--ava-raised); }
-[data-testid="stMarkdownContainer"] :is(.ava-topnav, .ava-actions) a.ava-top-in:hover {
+[data-testid="stMarkdownContainer"] .ava-topnav a.ava-top-in:hover {
   color: var(--ava-accent); border-color: var(--ava-accent); }
-[data-testid="stMarkdownContainer"] :is(.ava-topnav, .ava-actions) a.ava-top-up {
+[data-testid="stMarkdownContainer"] .ava-topnav a.ava-top-up {
   color: #fff; background: var(--ava-accent); border-color: var(--ava-accent); }
-[data-testid="stMarkdownContainer"] :is(.ava-topnav, .ava-actions) a.ava-top-up:hover {
+[data-testid="stMarkdownContainer"] .ava-topnav a.ava-top-up:hover {
   background: var(--ava-accent-strong); border-color: var(--ava-accent-strong); }
-[data-testid="stMarkdownContainer"] :is(.ava-topnav, .ava-actions) a:focus-visible {
+[data-testid="stMarkdownContainer"] .ava-topnav a:focus-visible {
   outline: 2px solid var(--ava-accent); outline-offset: 2px; }
 /* The page you're on is marked in the bar. */
 [data-testid="stMarkdownContainer"] .ava-topnav a.ava-top-in[aria-current="page"] {
   color: var(--ava-accent); border-color: var(--ava-accent); }
-/* The front page's buttons: the same pair, larger. */
-.ava-actions { gap: .75rem; margin: 0 0 1.25rem 0; }
-[data-testid="stMarkdownContainer"] .ava-actions a { min-height: 3rem; padding: 0 1.5rem; font-size: 1rem; }
 [data-testid="stMarkdownContainer"] a.ava-home { text-decoration: none; color: inherit; }
 [data-testid="stMarkdownContainer"] a.ava-home:focus-visible { outline: 2px solid var(--ava-accent); outline-offset: 4px;
                                                              border-radius: 2px; }
@@ -579,19 +576,8 @@ def _signup_panel(settings, email_ok: bool):
     _note(f"Already registered? {_link(SIGNIN_HREF, 'Sign in')}")
 
 
-def _hero_actions(signup: bool) -> str:
-    """The front page's two ways in, the same as the top bar's."""
-    if signup:
-        links = (f'<a class="ava-top-up" href="{REGISTER_HREF}" target="_self">Sign up</a>'
-                 f'<a class="ava-top-in" href="{SIGNIN_HREF}" target="_self">Sign in</a>')
-    else:
-        links = f'<a class="ava-top-up" href="{SIGNIN_HREF}" target="_self">Sign in</a>'
-    return (f'<div class="ava-actions ava-follow">{links}</div>'
-            '<p class="ava-note ava-follow">Your meetings are private: other users can\'t see them.</p>')
-
-
 def home_page():
-    """The front page: what the app does. Sign in and Sign up have their own pages."""
+    """The front page: what the app does. Sign in and Sign up are in the top bar."""
     from core.settings import get_settings
     settings = get_settings()
     signup = settings.signup_mode == "request"
@@ -607,7 +593,7 @@ def home_page():
                 f"{how} You get the full transcript, a short summary, "
                 "and answers drawn from what was actually said.", caption=False, follow=True,
                 brand=False)
-        st.markdown(_hero_actions(signup), unsafe_allow_html=True)
+        _note("Your meetings are private: other users can't see them.", follow=True)
 
     st.markdown(_landing_sections(settings), unsafe_allow_html=True)
 
