@@ -19,19 +19,36 @@ gatherUsageStats = false
 # "Caption track": cool paper surface, slate ink, one deep-teal accent.
 # Bricolage Grotesque for the interface; Newsreader for reading text
 # (transcripts, summaries, answers) is loaded in core/ui.py.
+#
+# Two versions, light and dark. Visitors pick one in the menu (top right,
+# Settings, then Light, Dark or "Use system setting"); system is the default.
+# The colours in core/ui.py follow whichever is active.
 [theme]
-base = "light"
 primaryColor = "#0E7C6B"
-backgroundColor = "#F4F6F8"
-secondaryBackgroundColor = "#E9EEF2"
-textColor = "#1C2733"
-linkColor = "#0E7C6B"
-borderColor = "#D8DEE5"
 showWidgetBorder = true
 baseRadius = "0.375rem"
 font = "Bricolage Grotesque:https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&display=swap, sans-serif"
 headingFontWeights = [600, 600, 600, 600, 600, 600]
 
-[theme.sidebar]
+[theme.light]
+backgroundColor = "#F4F6F8"
+secondaryBackgroundColor = "#E9EEF2"
+textColor = "#1C2733"
+linkColor = "#0E7C6B"
+borderColor = "#D8DEE5"
+
+[theme.light.sidebar]
 backgroundColor = "#EAEEF2"
 secondaryBackgroundColor = "#F8FAFB"
+
+# Dark: the same slate, deepened; the teal lifted so links stay readable.
+[theme.dark]
+backgroundColor = "#121920"
+secondaryBackgroundColor = "#1C252E"
+textColor = "#E4E9EE"
+linkColor = "#45BFA4"
+borderColor = "#2B3641"
+
+[theme.dark.sidebar]
+backgroundColor = "#161E26"
+secondaryBackgroundColor = "#1E2832"

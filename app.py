@@ -322,6 +322,7 @@ with st.sidebar:
             _reset_chat()
             st.rerun()
 
+    st.markdown(ui.theme_toggle(label=True), unsafe_allow_html=True)
     st.markdown(ui.credit_line(), unsafe_allow_html=True)
 
 

@@ -38,15 +38,31 @@ BASE_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap');
 
 :root {
-  --ava-surface: #F4F6F8;
-  --ava-raised: #FFFFFF;
-  --ava-ink: #1C2733;
-  --ava-muted: #5B6875;
-  --ava-faint: #8A96A3;
-  --ava-rule: #D8DEE5;
-  --ava-accent: #0E7C6B;
-  --ava-accent-strong: #0A6658;
+  /* light-dark() picks by the colour scheme Streamlit sets for the active
+     theme (Settings > Light / Dark), so every colour below follows it. */
+  --ava-surface: light-dark(#F4F6F8, #121920);
+  --ava-raised: light-dark(#FFFFFF, #1A232C);
+  --ava-ink: light-dark(#1C2733, #E4E9EE);
+  --ava-muted: light-dark(#5B6875, #A3AFBA);
+  --ava-faint: light-dark(#8A96A3, #7D8995);
+  --ava-rule: light-dark(#D8DEE5, #2B3641);
+  /* Accent for text, icons and lines: lifted in dark so it stays readable. */
+  --ava-accent: light-dark(#0E7C6B, #45BFA4);
+  --ava-accent-strong: light-dark(#0A6658, #6FD3BC);
+  /* Accent for filled buttons with white text: deep in both themes. */
+  --ava-fill: #0E7C6B;
+  --ava-fill-strong: light-dark(#0A6658, #12917C);
+  --ava-wave: light-dark(#CBD3DC, #3A4652);
+  --ava-screen: light-dark(#1C2733, #0C1217);
   --ava-read: 'Newsreader', Georgia, serif;
+}
+/* Browsers without light-dark() (before 2024) get the light colours. */
+@supports not (color: light-dark(#000, #fff)) {
+  :root {
+    --ava-surface: #F4F6F8; --ava-raised: #FFFFFF; --ava-ink: #1C2733; --ava-muted: #5B6875;
+    --ava-faint: #8A96A3; --ava-rule: #D8DEE5; --ava-accent: #0E7C6B; --ava-accent-strong: #0A6658;
+    --ava-fill-strong: #0A6658; --ava-wave: #CBD3DC; --ava-screen: #1C2733;
+  }
 }
 
 .block-container { padding-top: 2.5rem; max-width: 1100px; }
@@ -98,6 +114,19 @@ button { transition: background-color 150ms ease-out, border-color 150ms ease-ou
 .ava-gh span { text-decoration: underline; text-underline-offset: 3px; }
 .ava-credit { font-size: .8125rem; line-height: 1.7; color: var(--ava-faint); margin: 1.5rem 0 0 0; }
 
+/* Light or dark switch. */
+.ava-theme { display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+             min-height: 2.5rem; min-width: 2.5rem; padding: 0 .65rem; margin: 0;
+             border: 1px solid var(--ava-rule); border-radius: .375rem; background: var(--ava-raised);
+             color: var(--ava-ink); font: inherit; font-size: .875rem; cursor: pointer;
+             transition: border-color 150ms ease-out, color 150ms ease-out; }
+.ava-theme svg { width: 1.1rem; height: 1.1rem; flex: none; }
+.ava-theme:hover { border-color: var(--ava-accent); color: var(--ava-accent); }
+.ava-theme:focus-visible { outline: 2px solid var(--ava-accent); outline-offset: 2px; }
+[data-testid="stSidebar"] .ava-theme { margin-top: 1rem; }
+/* The switch's script block shows nothing, so it takes no room either. */
+[data-testid="stElementContainer"]:has([data-testid="stHtml"] script) { display: none; }
+
 /* Same-tab link styled as a secondary button (sign-out for email accounts). */
 .ava-button-link { display: inline-block; padding: .55rem 1rem; border: 1px solid var(--ava-rule);
                    border-radius: .375rem; background: var(--ava-raised); color: var(--ava-ink) !important;
@@ -142,9 +171,9 @@ SIGNED_OUT_CSS = """
 [data-testid="stMarkdownContainer"] .ava-topnav a.ava-top-in:hover {
   color: var(--ava-accent); border-color: var(--ava-accent); }
 [data-testid="stMarkdownContainer"] .ava-topnav a.ava-top-up {
-  color: #fff; background: var(--ava-accent); border-color: var(--ava-accent); }
+  color: #fff; background: var(--ava-fill); border-color: var(--ava-fill); }
 [data-testid="stMarkdownContainer"] .ava-topnav a.ava-top-up:hover {
-  background: var(--ava-accent-strong); border-color: var(--ava-accent-strong); }
+  background: var(--ava-fill-strong); border-color: var(--ava-fill-strong); }
 [data-testid="stMarkdownContainer"] .ava-topnav a:focus-visible {
   outline: 2px solid var(--ava-accent); outline-offset: 2px; }
 /* The page you're on is marked in the bar. */
@@ -167,11 +196,11 @@ SIGNED_OUT_CSS = """
 /* Primary actions on the signed-out pages. */
 :is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-request_access, .st-key-request_check, .st-key-register_submit, .st-key-login_submit, .st-key-er_submit, .st-key-verify_submit, .st-key-reset_submit, .st-key-reset_start_submit) button {
   width: auto; min-width: 16rem; min-height: 3rem; padding: 0 1.25rem;
-  background: var(--ava-accent); border-color: var(--ava-accent); color: #fff;
+  background: var(--ava-fill); border-color: var(--ava-fill); color: #fff;
 }
 :is(.st-key-google_signin, .st-key-google_register) button { padding-left: .75rem; }
 :is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-request_access, .st-key-request_check, .st-key-register_submit, .st-key-login_submit, .st-key-er_submit, .st-key-verify_submit, .st-key-reset_submit, .st-key-reset_start_submit) button:hover {
-  background: var(--ava-accent-strong); border-color: var(--ava-accent-strong); color: #fff;
+  background: var(--ava-fill-strong); border-color: var(--ava-fill-strong); color: #fff;
 }
 :is(.st-key-google_signin, .st-key-google_register, .st-key-switch_account, .st-key-request_access, .st-key-request_check, .st-key-register_submit, .st-key-login_submit, .st-key-er_submit, .st-key-verify_submit, .st-key-reset_submit, .st-key-reset_start_submit) button:focus-visible {
   outline: 2px solid var(--ava-accent); outline-offset: 3px;
@@ -202,7 +231,7 @@ SIGNED_OUT_CSS = """
    captioned word by word while the playhead moves along the waveform. */
 /* The brand sits in the top bar, so the player's top lines up with the headline. */
 .ava-player { margin: .45rem 0 0 0; }
-.ava-screen { position: relative; aspect-ratio: 16 / 9; background: var(--ava-ink);
+.ava-screen { position: relative; aspect-ratio: 16 / 9; background: var(--ava-screen);
               border-radius: .75rem .75rem 0 0; overflow: hidden; }
 .ava-screen .ava-play { position: absolute; left: 50%; top: 42%; width: 3.25rem; height: 3.25rem;
                         transform: translate(-50%, -50%); color: rgba(255,255,255,.22); }
@@ -211,12 +240,12 @@ SIGNED_OUT_CSS = """
                 background: rgba(8, 14, 20, .72); color: #fff; border-radius: .3rem;
                 padding: .35rem .75rem; font-size: 1.0625rem; line-height: 1.45; font-weight: 500; }
 .ava-scrub { position: relative; height: 3.5rem; background: var(--ava-raised);
-             border: 1px solid #E3E8ED; border-top: 0; border-radius: 0 0 .75rem .75rem;
+             border: 1px solid var(--ava-rule); border-top: 0; border-radius: 0 0 .75rem .75rem;
              padding: .75rem 1rem; }
 .ava-track { position: absolute; inset: .75rem 1rem; }
 .ava-wave { position: absolute; inset: 0; }
 .ava-wave svg { display: block; width: 100%; height: 100%; }
-.ava-wave rect { fill: #CBD3DC; }
+.ava-wave rect { fill: var(--ava-wave); }
 .ava-wave.ava-played rect { fill: var(--ava-accent); }
 .ava-wave.ava-played { clip-path: inset(0 58% 0 0); }
 .ava-head { position: absolute; top: -.3rem; bottom: -.3rem; left: 42%;
@@ -266,10 +295,15 @@ SIGNED_OUT_CSS = """
   .ava-signedout .ava-brand { margin-bottom: 2rem; }
   .ava-player { margin-top: 1rem; }
   .ava-topbar { margin: 1rem 0 2rem 0; }
+  .ava-topnav { gap: .4rem; }
   [data-testid="stMarkdownContainer"] .ava-topnav a { padding: 0 .8rem; }
   .ava-subtitle { font-size: .9375rem; bottom: .7rem; }
   .ava-grid, .ava-grid.ava-two { grid-template-columns: 1fr; gap: 1.75rem; }
   .ava-section { margin-top: 3rem; }
+}
+/* Phones: the bar keeps the icon and drops the name, so all three buttons fit. */
+@media (max-width: 480px) {
+  .ava-topbar .ava-brand span { display: none; }
 }
 </style>
 """.replace("__GOOGLE_G__", _GOOGLE_G)
@@ -317,8 +351,43 @@ def _icon(name: str) -> str:
             f"{_ICONS[name]}</svg>")
 
 
+# Light or dark: Streamlit keeps each visitor's choice in their browser
+# (the same setting as the menu's Settings > Theme). The button writes the
+# opposite of what's showing and reloads, so the whole page switches at once.
+_THEME_ICON = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" '
+               'aria-hidden="true"><circle cx="12" cy="12" r="8.5"/>'
+               '<path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/></svg>')
+
+_THEME_SCRIPT = """
+<script>
+if (!window.avaThemeReady) {
+  window.avaThemeReady = true;
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest("[data-ava-theme]");
+    if (!button) return;
+    var dark = getComputedStyle(button).colorScheme.indexOf("dark") !== -1;
+    try {
+      localStorage.setItem("stActiveTheme-" + location.pathname + "-v2",
+                           JSON.stringify(dark ? "Light" : "Dark"));
+    } catch (e) { return; }
+    location.reload();
+  });
+}
+</script>
+"""
+
+
+def theme_toggle(label: bool = False) -> str:
+    """The light/dark button: icon only in the top bar, with words in the sidebar."""
+    text = "<span>Light or dark</span>" if label else ""
+    return (f'<button type="button" class="ava-theme" data-ava-theme '
+            f'title="Switch between light and dark" aria-label="Switch between light and dark">'
+            f"{_THEME_ICON}{text}</button>")
+
+
 def base_css():
     st.markdown(BASE_CSS, unsafe_allow_html=True)
+    st.html(_THEME_SCRIPT, unsafe_allow_javascript=True)
 
 
 def _header(headline: str, lede_html: str, caption: bool = False, wide: bool = False,
@@ -489,7 +558,7 @@ def _top_bar(active: str, signup: bool):
         links += item("signup", "Sign up", REGISTER_HREF, "ava-top-up")
     home = f'<a class="ava-home" href="{HOME_HREF}" target="_self" aria-label="Home">{BRAND}</a>'
     st.markdown(f'<header class="ava-topbar">{home}<nav class="ava-topnav" aria-label="Account">'
-                f"{links}</nav></header>", unsafe_allow_html=True)
+                f"{theme_toggle()}{links}</nav></header>", unsafe_allow_html=True)
 
 
 def _signin_panel(settings, email_ok: bool):

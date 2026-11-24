@@ -150,6 +150,8 @@ def test_top_bar_links_to_sign_in_and_sign_up(monkeypatch):
     assert 'href="?page=signin"' in bar and ">Sign in</a>" in bar
     assert 'href="?page=register"' in bar and ">Sign up</a>" in bar
 
+    assert "data-ava-theme" in bar    # the light/dark switch
+
     # With sign-ups off, the bar offers Sign in only.
     monkeypatch.setenv("SIGNUP_MODE", "invite")
     from core.settings import get_settings
